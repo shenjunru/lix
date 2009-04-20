@@ -1,24 +1,25 @@
 A pure-JavaScript CSS selector engine designed to be easily dropped in to a host library.
 
-Discussion:
+Discussion
 	http://groups.google.com/group/lixjs
 
 Features
 	- Completely standalone (no library dependencies)
-	- Only 7KB minified
+	- Less than 3KB minified and gzipped
 	- Highly extensible with easy-to-use API
 
 Selector Features
 	- CSS 3 Selector support
 	- Full Unicode support
 	- Contains text :contains(text)
-	- Complex :not :not(a#id)
-	- Multiple :not :not(div,p)
+	* Complex :not :not(a#id)
+	* Multiple :not :not(div,p)
 	- Not attribute value [name!=value]
 	- Has selector :has(div)
-	- Position selectors :first, :last, :even, :odd, :gt, :lt, :eq
+	* Position selectors :first, :last, :even, :odd, :gt, :lt, :eq
 	- Easy Form selectors :input, :text, :checkbox, :file, :password, :submit, :image, :reset, :button
 	- Header selector :header
+	Note: * That has not completed.
 
 Code Features
 	- Uses a single code path (no XPath)
