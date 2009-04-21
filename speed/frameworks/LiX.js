@@ -1,15 +1,17 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project began: 2009-02-18
- * Version: 1.0-1 build 20090419
+ * Version: 1.0-2 build 20090421
  * 
  * Copyright (c) 2009 Shen Junru
- * Dual licensed under the MIT and GPL licenses.
+ * Released under the MIT, BSD, and GPL Licenses.
  * 
  * Inspiration:
  * 	- Some functionality inspired by [jQuery.js](http://jQuery.com) Copyright (c) 2009 John Resig, [MIT and GPL licenses](http://docs.jquery.com/License)
 */
 (function(){
+// Fix document.nodeType in IE5.5
+if (!document.nodeType) document.nodeType = 9;
 // Selector Object
 var Selector = function(){
 	this.prev = null;
@@ -33,37 +35,44 @@ PATTERN = {
 	NTH: /(-?)(\d*)n((?:\+|-)?\d*)/
 },
 $break = {},
-// Bind data to selector
+// Throw Syntax Error
+_syntaxError = function(i){
+	throw new SyntaxError('css parse error, char:' + i);
+},
+// Bind data to Selector Object
 _model = {
 	'.': function(selector, match){
 		selector.detector['.'] = selector.detector['.'] || [];
 		selector.detector['.'].push(match[2]);
 	},
-	':': function(selector, match){
+	':': function(selector, match, i){
 		selector.detector[':'] = selector.detector[':'] || [];
 		var ret = { name: match[1], value: match[2] };
-		
-		if (ret.value) {
-			switch (ret.name) {
-				case 'not':{
-					ret.value = _parseSimple(ret.value);
-					break;
-				}
-				case 'nth-child':{
-					// parse equations like 'even', 'odd', '5', '2n', '3n+2', '4n-1', '-n+6'
-					var m = PATTERN.NTH.exec(ret.value == 'even' && '2n' ||
-					ret.value == 'odd' && '2n+1' ||
-					!/\D/.test(ret.value) && '0n+' + ret.value ||
-					ret.value);
-					
-					// calculate the numbers (a)n+(b) including if they are negative
-					ret.value = {
-						a: (m[1] + (m[2] || 1)) - 0,
-						b: m[3] - 0
-					};
-					break;
+		try {
+			if (ret.value) {
+				switch (ret.name) {
+					case 'not':{
+						ret.value = _parseSimple(ret.value);
+						break;
+					}
+					case 'nth-child':{
+						// parse equations like 'even', 'odd', '5', '2n', '3n+2', '4n-1', '-n+6'
+						var m = PATTERN.NTH.exec(ret.value == 'even' && '2n' ||
+						ret.value == 'odd' && '2n+1' ||
+						!/\D/.test(ret.value) && '0n+' + ret.value ||
+						ret.value);
+						
+						// calculate the numbers (a)n+(b) including if they are negative
+						ret.value = {
+							a: (m[1] + (m[2] || 1)) - 0,
+							b: m[3] - 0
+						};
+						break;
+					}
 				}
 			}
+		} catch(e){
+			_syntaxError(i);
 		}
 		selector.detector[':'].push(ret);
 	},
@@ -130,18 +139,22 @@ _parseCSS = function(str){
 	var ret = [], i = 0, l = str.length, g = 0, ng = true, _str, m1, m2, sl, _sl;
 	while (i < l) {
 		_str = str.slice(i, l), m1 = PATTERN.CHAR.exec(_str);
-		if (!m1) break;
+		
+		// Throw Syntax Error
+		if (!m1) _syntaxError(i);
+		
 		sl = new Selector(), sl.group = g;
 		switch (m1[1]) {
 			// Filter
-			case '>': case '~': case '+':{
+			case '>': case '~': case '+':
 				m2 = PATTERN.FILTER.exec(_str);
-				if (m2) sl.filter = m2[1], sl.tag = m2[2];
-				if (_sl) _sl.next = sl, sl.prev = _sl;
+				if (m2) {
+					sl.filter = m2[1], sl.tag = m2[2];
+					if (_sl) _sl.next = sl, sl.prev = _sl;
+				}
 				break;
-			}
 			// ID
-			case '#':{
+			case '#':
 				m2 = PATTERN.ID.exec(_str);
 				if (m2) {
 					if (!m2[1]) sl = _sl || sl;
@@ -149,9 +162,8 @@ _parseCSS = function(str){
 					if (m2[1] && _sl) _sl.next = sl, sl.prev = _sl;
 				}
 				break;
-			}
 			// Class
-			case '.':{
+			case '.':
 				m2 = PATTERN.CLASS.exec(_str);
 				if (m2) {
 					if (m2[1] && _sl) _sl.next = sl, sl.prev = _sl;
@@ -159,34 +171,33 @@ _parseCSS = function(str){
 					_model['.'](sl, m2);
 				}
 				break;
-			}
 			// PSEUDO
-			case ':':{
+			case ':':
 				m2 = PATTERN.PSEUDO.exec(_str);
-				if (m2) sl = _sl || sl, _model[':'](sl, m2);
+				if (m2) sl = _sl || sl, _model[':'](sl, m2, i);
 				break;
-			}
 			// Attr
-			case '[':{
+			case '[':
 				m2 = PATTERN.ATTR.exec(_str);
 				if (m2) sl = _sl || sl, _model['[]'](sl, m2);
 				break;
-			}
 			// Group split
-			case ',':{
+			case ',':
 				m2 = PATTERN.SPLIT.exec(_str);
-				ng = true, g++, _sl = sl = null;
+				if (m2) ng = true, g++, _sl = sl = null;
 				break;
-			}
 			// Tag
-			default:{
+			default:
 				m2 = PATTERN.TAG.exec(_str);
-				sl.tag = m2[1];
-				if (_sl) _sl.next = sl, sl.prev = _sl;
+				if (m2) {
+					sl.tag = m2[1];
+					if (_sl) _sl.next = sl, sl.prev = _sl;
+				}
 				break;
-			}
 		}
-		i += (m2 ? m2[0] : _str).length;
+		// Throw Syntax Error
+		if (!m2) _syntaxError(i);
+		i += m2[0].length;
 		if (ng && (_sl || sl)) ret.push(_sl || sl), ng = false;
 		_sl = sl;
 	}
@@ -214,9 +225,13 @@ var CSSQuery = function(selector, context){
 	// Handle: String
 	if (typeof(selector) === 'string') {
 		this.selector = selector;
-		var stack = _parseCSS(selector), context = new this.constructor(this.context), i = 0, frag;
-		while ((frag = stack[i++]))
-			_query(this, frag, context);
+		try {
+			var stack = _parseCSS(selector), context = new this.constructor(this.context), i = 0, frag;
+			while ((frag = stack[i++])) 
+				_query(this, frag, context);
+		} catch (e) {
+			throw e;
+		}
 		return;
 	}
 	
@@ -468,6 +483,7 @@ PSEUDO: {
 }
 };
 // Expose
+window.parseCSS = _parseCSS;
 window.$ = function(selector, context){
 	return new CSSQuery(selector, context);
 };
