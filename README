@@ -4,6 +4,7 @@ Discussion
 	http://groups.google.com/group/lixjs
 
 Features
+	- Support IE 5.5+, Firefox, Opera, Safari, Chrome
 	- Completely standalone (no library dependencies)
 	- Less than 3KB minified and gzipped
 	- Highly extensible with easy-to-use API
@@ -22,5 +23,6 @@ Selector Features
 	Note: * That has not completed.
 
 Code Features
+	- Provides meaningful error messages for syntax problems
 	- Uses a single code path (no XPath)
 	- Uses no browser-sniffing
