@@ -473,6 +473,7 @@ PSEUDO: {
 		return true;
 	},
 	'nth-child': function(node, value, index){
+		if (value.a == 1 && value.b == 0) return true;
 		var diff = (index || _getNodeIndex(node)) - value.b;
 		if (value.a == 0) return diff == 0;
 		else return (diff % value.a == 0 && diff / value.a >= 0);
