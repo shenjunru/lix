@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project began: 2009-02-18
- * Version: 1.0-2 build 20090421
+ * Version: 1.0-2 build 20090427
  * 
  * Copyright (c) 2009 Shen Junru
  * Released under the MIT, BSD, and GPL Licenses.
@@ -51,11 +51,12 @@ _model = {
 		try {
 			if (ret.value) {
 				switch (ret.name) {
-					case 'not':{
+					case 'not':
 						ret.value = _parseSimple(ret.value);
 						break;
-					}
-					case 'nth-child':{
+					case 'nth-child':
+						if (/^\bn\b$/i.test(ret.value)) return;
+						
 						// parse equations like 'even', 'odd', '5', '2n', '3n+2', '4n-1', '-n+6'
 						var m = PATTERN.NTH.exec(ret.value == 'even' && '2n' ||
 						ret.value == 'odd' && '2n+1' ||
@@ -68,7 +69,6 @@ _model = {
 							b: m[3] - 0
 						};
 						break;
-					}
 				}
 			}
 		} catch(e){
@@ -240,6 +240,7 @@ var CSSQuery = function(selector, context){
 	for (var i = 0; i < selector.length; i++)
 		if (selector[i].nodeType) this.push(selector[i]);
 },
+_cache = {},
 _query = function(result, selector, context){
 	var next = selector.next;
 	if (context instanceof result.constructor) result.prevResult = context;
@@ -296,9 +297,13 @@ _contains = function(ancestor, descendant){
 },
 _getNodeIndex = function(node){
 	var i = 0, tmp = node.parentNode.firstChild;
+	if (_cache.node && _cache.node.parentNode === node.parentNode) i = _cache.index, tmp = _cache.node;
+	
 	for (; tmp; tmp = tmp.nextSibling) 
-		if (tmp.nodeType === 1) if (tmp === node) return ++i;
-		else ++i;
+		if (tmp === node) {
+			_cache.node = node, _cache.index = i;
+			return ++i;
+		} else if (tmp.nodeType === 1) ++i;
 },
 _contextFilter = function(selector, context){
 	var node, prevNode, i = 0, result = [];
@@ -356,21 +361,21 @@ FILTER: {
 		while((node = nodes[i++])) if(_detector(selector, node, null)) result.push(node);
 	},
 	'>': function(result, selector, context){
-		var i = 0, node, children = context.childNodes || [];
-		while ((node = children[i++])) if(node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, i)) result.push(node);
+		var i = 0, j = 1, node, children = context.childNodes || [];
+		while ((node = children[i++])) if(node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, j++)) result.push(node);
 	},
 	'+': function(result, selector, context){
-		var i = 0, node = context;
+		var node = context;
 		while ((node = node.nextSibling)) 
 			if (node.nodeType == 1) {
-				if (_tagChk(selector, node) && _detector(selector, node, i++)) result.push(node);
+				if (_tagChk(selector, node) && _detector(selector, node, null)) result.push(node);
 				break;
 			}
 	},
 	'~': function(result, selector, context){
-		var i = 0, node = context;
+		var node = context;
 		while ((node = node.nextSibling))
-			if(node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, i++)) result.push(node);
+			if(node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, null)) result.push(node);
 	}
 },
 // Detectors
@@ -473,7 +478,7 @@ PSEUDO: {
 		return true;
 	},
 	'nth-child': function(node, value, index){
-		if (value.a == 1 && value.b == 0) return true;
+//		if (value.a == 1 && value.b == 0) return true;
 		var diff = (index || _getNodeIndex(node)) - value.b;
 		if (value.a == 0) return diff == 0;
 		else return (diff % value.a == 0 && diff / value.a >= 0);
