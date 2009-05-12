@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
- * Project began: 2009-02-18
- * Version: 1.0-2 build 20090427
+ * Project since: 2009-02-18
+ * Version: 1.0-3 build 20090512
  * 
  * Copyright (c) 2009 Shen Junru
  * Released under the MIT, BSD, and GPL Licenses.
@@ -10,8 +10,6 @@
  * 	- Some functionality inspired by [jQuery.js](http://jQuery.com) Copyright (c) 2009 John Resig, [MIT and GPL licenses](http://docs.jquery.com/License)
 */
 (function(){
-// Fix document.nodeType in IE5.5
-if (!document.nodeType) document.nodeType = 9;
 // Selector Object
 var Selector = function(){
 	this.prev = null;
@@ -37,103 +35,102 @@ PATTERN = {
 $break = {},
 // Throw Syntax Error
 _syntaxError = function(i){
-	throw new SyntaxError('css parse error, char:' + i);
+	return new SyntaxError('css parse error, char:' + i);
 },
 // Bind data to Selector Object
 _model = {
-	'.': function(selector, match){
+	'.': function(selector, match, i){
 		selector.detector['.'] = selector.detector['.'] || [];
 		selector.detector['.'].push(match[2]);
 	},
 	':': function(selector, match, i){
-		selector.detector[':'] = selector.detector[':'] || [];
-		var ret = { name: match[1], value: match[2] };
 		try {
-			if (ret.value) {
-				switch (ret.name) {
-					case 'not':
-						ret.value = _parseSimple(ret.value);
-						break;
-					case 'nth-child':
-						if (/^\bn\b$/i.test(ret.value)) return;
-						
-						// parse equations like 'even', 'odd', '5', '2n', '3n+2', '4n-1', '-n+6'
-						var m = PATTERN.NTH.exec(ret.value == 'even' && '2n' ||
-						ret.value == 'odd' && '2n+1' ||
-						!/\D/.test(ret.value) && '0n+' + ret.value ||
-						ret.value);
-						
-						// calculate the numbers (a)n+(b) including if they are negative
-						ret.value = {
-							a: (m[1] + (m[2] || 1)) - 0,
-							b: m[3] - 0
-						};
-						break;
-				}
-			}
-		} catch(e){
-			_syntaxError(i);
+			selector.detector[':'] = selector.detector[':'] || [];
+			var name = match[1], value = match[2], parser = SUB_PARSER[':'][name];
+			if (value && parser) value = parser(value);
+			selector.detector[':'].push({
+				name: name,
+				value: value
+			});
+		} catch (e) {
+			if (e != $break) throw _syntaxError(i);
 		}
-		selector.detector[':'].push(ret);
 	},
-	'[]': function(selector, match){
-		selector.detector['[]'] = selector.detector['[]'] || [];
-		var ret = {
-			name: match[1],
-			match: match[2] || '',
-			value: match[5] || match[4] || match[3],
-			target: null
-		};
-		
-		switch (ret.name) {
-			case 'class':{
-				var value = ret.value;
-				if (!value) break;
-				switch (ret.match) {
-					case '*=':
-						break;
-					case '|=': case '^=':
-						value = ' ' + value;
-						break;
-					case '$=':
-						value = value + ' ';
-						break;
-					default:
-						value = ' ' + value + ' ';
-						break;
-				}
-				ret.value = value;
-				break;
-			}
+	'[]': function(selector, match, i){
+		try {
+			selector.detector['[]'] = selector.detector['[]'] || [];
+			var name = match[1], expr = match[2] || '', value = match[5] || match[4] || match[3], parser = SUB_PARSER['[]'][name];
+			if (value && parser) value = parser(expr, value);
+			selector.detector['[]'].push({
+				name: name,
+				expr: expr,
+				value: value,
+				target: null
+			});
+		} catch (e) {
+			if (e != $break) throw _syntaxError(i);
 		}
-		selector.detector['[]'].push(ret);
 	}
 },
-_parseSimple = function(str){
-	var ret = {detector:{}}, i = 0, l = str.length, _str, m1, m2;
-	while (i < l) {
-		_str = str.slice(i, l), m1 = PATTERN.CHAR.exec(_str);
-		if (!m1) break;
-		switch (m1[1]) {
-			// Class
-			case '.':
-				m2 = PATTERN.CLASS.exec(_str);
-				if (m2) _model['.'](ret, m2);
-				break;
-			// PSEUDO
-			case ':':
-				m2 = PATTERN.PSEUDO.exec(_str);
-				if (m2) _model[':'](ret, m2);
-				break;
-			// Attr
-			case '[':
-				m2 = PATTERN.ATTR.exec(_str);
-				if (m2) _model['[]'](ret, m2);
-				break;
+SUB_PARSER = {
+	':': {
+		'not': function(str){
+			var ret = {detector:{}}, i = 0, l = str.length, _str, m1, m2;
+			while (i < l) {
+				_str = str.slice(i, l), m1 = PATTERN.CHAR.exec(_str);
+				if (!m1) break;
+				switch (m1[1]) {
+					// Class
+					case '.':
+						m2 = PATTERN.CLASS.exec(_str);
+						if (m2) _model['.'](ret, m2);
+						break;
+					// PSEUDO
+					case ':':
+						m2 = PATTERN.PSEUDO.exec(_str);
+						if (m2) _model[':'](ret, m2);
+						break;
+					// Attr
+					case '[':
+						m2 = PATTERN.ATTR.exec(_str);
+						if (m2) _model['[]'](ret, m2);
+						break;
+				}
+				i += (m2 ? m2[0] : _str).length;
+			}
+			return ret;
+		},
+		'nth-child': function(str){
+			if (/^\bn\b$/i.test(str)) throw $break;
+			// parse equations like 'even', 'odd', '5', '2n', '3n+2', '4n-1', '-n+6'
+			var m = PATTERN.NTH.exec(str == 'even' && '2n' ||
+			str == 'odd' && '2n+1' ||
+			!/\D/.test(str) && '0n+' + str ||
+			str);
+			
+			// calculate the numbers (a)n+(b) including if they are negative
+			return {
+				a: (m[1] + (m[2] || 1)) - 0,
+				b: m[3] - 0
+			};
 		}
-		i += (m2 ? m2[0] : _str).length;
+	},
+	'[]':{
+		'class': function(expr, value){
+			if (!value) return value;
+			switch (expr) {
+				case '*=':
+					return value;
+				case '|=':
+				case '^=':
+					return ' ' + value;
+				case '$=':
+					return value + ' ';
+				default:
+					return ' ' + value + ' ';
+			}
+		}
 	}
-	return ret;
 },
 _parseCSS = function(str){
 	var ret = [], i = 0, l = str.length, g = 0, ng = true, _str, m1, m2, sl, _sl;
@@ -141,7 +138,7 @@ _parseCSS = function(str){
 		_str = str.slice(i, l), m1 = PATTERN.CHAR.exec(_str);
 		
 		// Throw Syntax Error
-		if (!m1) _syntaxError(i);
+		if (!m1) throw _syntaxError(i);
 		
 		sl = new Selector(), sl.group = g;
 		switch (m1[1]) {
@@ -168,7 +165,7 @@ _parseCSS = function(str){
 				if (m2) {
 					if (m2[1] && _sl) _sl.next = sl, sl.prev = _sl;
 					else sl = _sl || sl;
-					_model['.'](sl, m2);
+					_model['.'](sl, m2, i);
 				}
 				break;
 			// PSEUDO
@@ -179,7 +176,7 @@ _parseCSS = function(str){
 			// Attr
 			case '[':
 				m2 = PATTERN.ATTR.exec(_str);
-				if (m2) sl = _sl || sl, _model['[]'](sl, m2);
+				if (m2) sl = _sl || sl, _model['[]'](sl, m2, i);
 				break;
 			// Group split
 			case ',':
@@ -196,15 +193,19 @@ _parseCSS = function(str){
 				break;
 		}
 		// Throw Syntax Error
-		if (!m2) _syntaxError(i);
+		if (!m2) throw _syntaxError(i);
 		i += m2[0].length;
 		if (ng && (_sl || sl)) ret.push(_sl || sl), ng = false;
 		_sl = sl;
 	}
 	return ret;
 };
+
+// Fix document.nodeType in IE5.5
+if (!document.nodeType) document.nodeType = 9;
+
 // CSS query engine
-var CSSQuery = function(selector, context){
+var LiX = function(selector, context){
 	// Arguments Fix
 	selector = selector || document;
 	
@@ -253,9 +254,10 @@ _query = function(result, selector, context){
 		selector.next = next;
 	} else {
 		var i = 0, temp, _context = _contextFilter(selector, context);
+		_cache = {};
 		try {
 			while ((temp = _context[i++])) 
-				if (temp.nodeType) _FN.FILTER[selector.filter](result, selector, temp);
+				if (temp.nodeType) FILTER[selector.filter](result, selector, temp);
 		} catch (e) {
 			if (e != $break) throw e;
 		}
@@ -269,12 +271,13 @@ _detector = function(selector, node, index){
 	// class, pseudo, attr check
 	for (expr in selector.detector) {
 		if (!result) break;
-		result = _FN.DETECTOR[expr](node, selector.detector[expr], index);
+		result = DETECTOR[expr](node, selector.detector[expr], index);
 	}
 	return result;
 },
 _AttrMap = {
 	'class': 'className',
+	'for': 'htmlFor',
 	'id': 'id'
 },
 _makeArray = function(object){
@@ -345,24 +348,25 @@ _setAttrTarget = function(attr, node){
 	}
 	return attr;
 },
-_FN = {
-// Relation Filters
-FILTER: {
+// Relation Filter
+FILTER = {
+	'': function(result, selector, context){
+		var i = 0, node, nodes = context.getElementsByTagName(selector.tag) || [];
+		while ((node = nodes[i++])) 
+			if (_detector(selector, node, null)) result.push(node);
+	},
 	'#': function(result, selector, context){
 		var node = document.getElementById(selector.id);
 		if (node && _tagChk(selector, node) && _detector(selector, node, null)) {
 			if (selector.prev == null) result.push(node);
-			else if(_contains(context, node)) result.push(node);
+			else if (_contains(context, node)) result.push(node);
 			throw $break;
 		}
 	},
-	'': function(result, selector, context){
-		var i = 0, node, nodes = context.getElementsByTagName(selector.tag) || [];
-		while((node = nodes[i++])) if(_detector(selector, node, null)) result.push(node);
-	},
 	'>': function(result, selector, context){
 		var i = 0, j = 1, node, children = context.childNodes || [];
-		while ((node = children[i++])) if(node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, j++)) result.push(node);
+		while ((node = children[i++])) 
+			if (node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, j++)) result.push(node);
 	},
 	'+': function(result, selector, context){
 		var node = context;
@@ -374,17 +378,17 @@ FILTER: {
 	},
 	'~': function(result, selector, context){
 		var node = context;
-		while ((node = node.nextSibling))
-			if(node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, null)) result.push(node);
+		while ((node = node.nextSibling)) 
+			if (node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, null)) result.push(node);
 	}
 },
-// Detectors
-DETECTOR: {
+// Result detector : call by filter
+DETECTOR = {
 	':': function(node, data, index){
 		var result = true, i = 0, frag;
 		while (result && (frag = data[i++])) {
-			var detector = _FN.PSEUDO[frag.name.toLowerCase()];
-			result = detector ? detector(node, frag.value, index) : false;
+			var probe = PROBE.PSEUDO[frag.name.toLowerCase()];
+			result = probe ? probe(node, frag.value, index) : false;
 		}
 		return result;
 	},
@@ -399,12 +403,14 @@ DETECTOR: {
 		var result = true, i = 0, attr;
 		while (result && (attr = data[i++])) {
 			attr = _setAttrTarget(attr, node);
-			result = _FN.ATTR[attr.match](attr.target, attr.value);
+			result = PROBE.ATTR[attr.expr](attr.target, attr.value);
 		}
 		return result;
 	}
 },
-// Attribute Detectors
+// Element probe : call by detector
+PROBE = {
+// Attribute probe
 ATTR: {
 	'': function(target, value){
 		return !!target;
@@ -431,7 +437,7 @@ ATTR: {
 		return target ? target === value || target.substr(0, value.length + 1) === value + '-' : false;
 	}
 },
-// PSEUDO Detectors
+// PSEUDO probe
 PSEUDO: {
 	// Form Element
 	button: function(node){return 'button' === node.type || node.nodeName.toUpperCase() === 'BUTTON';},
@@ -456,7 +462,7 @@ PSEUDO: {
 	empty: function(node){return !node.firstChild;},
 	parent: function(node){return !!node.firstChild;},
 	contains: function(node, value){return (node.textContent || node.innerText || '').indexOf(value) >= 0;},
-	has: function(node, value){return !!(new CSSQuery(value, node)).length;},
+	has: function(node, value){return !!(new LiX(value, node)).length;},
 	// Child
 	'first-child': function(node){
 		while (node = node.previousSibling) 
@@ -478,7 +484,7 @@ PSEUDO: {
 		return true;
 	},
 	'nth-child': function(node, value, index){
-//		if (value.a == 1 && value.b == 0) return true;
+		// if (value.a == 1 && value.b == 0) return true;
 		var diff = (index || _getNodeIndex(node)) - value.b;
 		if (value.a == 0) return diff == 0;
 		else return (diff % value.a == 0 && diff / value.a >= 0);
@@ -488,9 +494,34 @@ PSEUDO: {
 	not: function(node, value, index){return !_detector(value, node, index);}
 }
 };
+
+// add functions to LiX
+LiX.parseCSS = _parseCSS;
+LiX.regPseudo = (function(){
+	function reg(target, from){
+		var name, fn;
+		for (name in from) {
+			fn = from[name], name = name.toLowerCase();
+			if (typeof fn == 'function' && !(name in target)) target[name] = fn;
+		}
+	}
+	return function(obj){
+		for (var name in obj) {
+			switch (name.toLowerCase()) {
+				case 'parser':
+					reg(SUB_PARSER[':'], obj[name]);
+					break;
+				case 'probe':
+					reg(PROBE.PSEUDO, obj[name]);
+					break;
+			}
+		}
+	}
+})();
+
 // Expose
-window.parseCSS = _parseCSS;
+window.LiX = LiX;
 window.$ = function(selector, context){
-	return new CSSQuery(selector, context);
+	return new LiX(selector, context);
 };
 })();
