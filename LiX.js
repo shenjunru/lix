@@ -1,13 +1,13 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0-3 build 20090512
+ * Version: 1.0.3.1 build 20090602
  * 
  * Copyright (c) 2009 Shen Junru
  * Released under the MIT, BSD, and GPL Licenses.
  * 
  * Inspiration:
- * 	- Some functionality inspired by [jQuery.js](http://jQuery.com) Copyright (c) 2009 John Resig, [MIT and GPL licenses](http://docs.jquery.com/License)
+ * 	- Some functionality inspired by [sizzle.js](http://sizzlejs.com)
 */
 (function(){
 // Selector Object
@@ -210,21 +210,16 @@ var LiX = function(selector, context){
 	selector = selector || document;
 	
 	// Initialization
-	this.push = Array.prototype.push;
 	this.length = 0;
 	this.selector = '';
 	this.context = context || document;
-	this.prevResult = null;
+	this.push = Array.prototype.push;
 	
-	// Handle: DOM Node
 	if (selector.nodeType) {
+		// Handle: DOM Node
 		this.push(selector);
-		this.context = selector;
-		return;
-	}
-	
-	// Handle: String
-	if (typeof(selector) === 'string') {
+	} else if (typeof(selector) === 'string') {
+		// Handle: String
 		this.selector = selector;
 		try {
 			var stack = _parseCSS(selector), context = new this.constructor(this.context), i = 0, frag;
@@ -233,18 +228,17 @@ var LiX = function(selector, context){
 		} catch (e) {
 			throw e;
 		}
-		return;
+	} else {
+		// Handle: Array
+		selector = _makeArray(selector);
+		for (var i = 0; i < selector.length; i++) 
+			if (selector[i].nodeType) this.push(selector[i]);
 	}
-	
-	// Handle: Array
-	selector = _makeArray(selector);
-	for (var i = 0; i < selector.length; i++)
-		if (selector[i].nodeType) this.push(selector[i]);
+	delete this.push;
 },
 _cache = {},
 _query = function(result, selector, context){
 	var next = selector.next;
-	if (context instanceof result.constructor) result.prevResult = context;
 	if (next) {
 		var current = new result.constructor(), i = 0;
 		selector.next = null, current.length = 0, delete current[0];
