@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.3.1 build 20090602
+ * Version: 1.0.3.1 build 20090608
  * 
  * Copyright (c) 2009 Shen Junru
  * Released under the MIT, BSD, and GPL Licenses.
@@ -234,7 +234,6 @@ var LiX = function(selector, context){
 		for (var i = 0; i < selector.length; i++) 
 			if (selector[i].nodeType) this.push(selector[i]);
 	}
-	delete this.push;
 },
 _cache = {},
 _query = function(result, selector, context){
@@ -350,7 +349,7 @@ FILTER = {
 			if (_detector(selector, node, null)) result.push(node);
 	},
 	'#': function(result, selector, context){
-		var node = document.getElementById(selector.id);
+		var node = (context.ownerDocument || document).getElementById(selector.id);
 		if (node && _tagChk(selector, node) && _detector(selector, node, null)) {
 			if (selector.prev == null) result.push(node);
 			else if (_contains(context, node)) result.push(node);
