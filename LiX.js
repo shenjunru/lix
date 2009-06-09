@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.3.1 build 20090608
+ * Version: 1.0.3.2 build 20090609
  * 
  * Copyright (c) 2009 Shen Junru
  * Released under the MIT, BSD, and GPL Licenses.
@@ -206,51 +206,43 @@ if (!document.nodeType) document.nodeType = 9;
 
 // CSS query engine
 var LiX = function(selector, context){
-	// Arguments Fix
-	selector = selector || document;
-	
-	// Initialization
-	this.length = 0;
-	this.selector = '';
-	this.context = context || document;
-	this.push = Array.prototype.push;
+	context = _toElems(context || document);
+	var ret = [];
 	
 	if (selector.nodeType) {
 		// Handle: DOM Node
-		this.push(selector);
+		ret.push(selector);
 	} else if (typeof(selector) === 'string') {
 		// Handle: String
-		this.selector = selector;
 		try {
-			var stack = _parseCSS(selector), context = new this.constructor(this.context), i = 0, frag;
+			var stack = _parseCSS(selector), i = 0, frag;
 			while ((frag = stack[i++])) 
-				_query(this, frag, context);
+				_query(ret, frag, context);
 		} catch (e) {
 			throw e;
 		}
 	} else {
-		// Handle: Array
-		selector = _makeArray(selector);
-		for (var i = 0; i < selector.length; i++) 
-			if (selector[i].nodeType) this.push(selector[i]);
+		ret = _toElems(selector);
 	}
+	return ret;
 },
 _cache = {},
-_query = function(result, selector, context){
+_query = function(ret, selector, context){
 	var next = selector.next;
 	if (next) {
-		var current = new result.constructor(), i = 0;
-		selector.next = null, current.length = 0, delete current[0];
+		var current = [], i = 0;
+		selector.next = null;
 		arguments.callee(current, selector, context);
-		current.lenght == 0 || arguments.callee(result, next, current);
+		current.lenght == 0 || arguments.callee(ret, next, current);
 		// restore the selector link
 		selector.next = next;
 	} else {
+		if(!context.length) context = document;
 		var i = 0, temp, _context = _contextFilter(selector, context);
 		_cache = {};
 		try {
 			while ((temp = _context[i++])) 
-				if (temp.nodeType) FILTER[selector.filter](result, selector, temp);
+				if (temp.nodeType) FILTER[selector.filter](ret, selector, temp);
 		} catch (e) {
 			if (e != $break) throw e;
 		}
@@ -260,29 +252,32 @@ _tagChk = function(selector, node){
 	return selector.tag == '*' ? true : node.tagName.toLowerCase() == selector.tag.toLowerCase();
 },
 _detector = function(selector, node, index){
-	var expr, result = true;
+	var expr, ret = true;
 	// class, pseudo, attr check
 	for (expr in selector.detector) {
-		if (!result) break;
-		result = DETECTOR[expr](node, selector.detector[expr], index);
+		if (!ret) break;
+		ret = DETECTOR[expr](node, selector.detector[expr], index);
 	}
-	return result;
+	return ret;
 },
 _AttrMap = {
 	'class': 'className',
 	'for': 'htmlFor',
 	'id': 'id'
 },
-_makeArray = function(object){
-	var result = [];
-	if (object != null) {
-		var i = object.length;
-		// The window, strings (and functions) also have 'length'
-		if (i == null || typeof(object) === 'string' || typeof(object) === 'function' || object.setInterval) result[0] = object;
-		else while (i) 
-			result[--i] = object[i];
+_isElem = function(obj){
+	return (obj && (obj.nodeType === 1 || obj.nodeType === 9));
+},
+_toElems = function(obj){
+	var ret = [];
+	if (obj != null) {
+		if (_isElem(obj)) return [obj];
+		if (obj.length && typeof(obj) !== 'string' && typeof(obj) !== 'function' && !obj.setInterval) {
+			for (var i = 0; i < obj.length; i++) 
+				if (_isElem(obj[i])) ret.push(obj[i]);
+		}
 	}
-	return result;
+	return ret;
 },
 _contains = function(ancestor, descendant){
 	if (ancestor.compareDocumentPosition) return (ancestor.compareDocumentPosition(descendant) & 16) === 16;
@@ -302,22 +297,22 @@ _getNodeIndex = function(node){
 		} else if (tmp.nodeType === 1) ++i;
 },
 _contextFilter = function(selector, context){
-	var node, prevNode, i = 0, result = [];
+	var node, prevNode, i = 0, ret = [];
 	switch (selector.filter) {
 		case '~':{
 			while ((node = context[i++])) 
-				if (node.nodeType) {result.push(node);break;}
+				if (node.nodeType) {ret.push(node);break;}
 			while ((prevNode = node, node = context[i++]))
-				if (_contains(prevNode, node)) result.push(node);
-			return result;
+				if (_contains(prevNode, node)) ret.push(node);
+			return ret;
 		}
 		case '':{
 			while ((node = context[i++])) 
-				if (node.nodeType) {result.push(node);break;}
+				if (node.nodeType) {ret.push(node);break;}
 			while ((prevNode = node, node = context[i++]))
-				if (_contains(node, prevNode)) result = [node];
-				else if (!_contains(prevNode, node)) result.push(node);
-			return result;
+				if (_contains(node, prevNode)) ret = [node];
+				else if (!_contains(prevNode, node)) ret.push(node);
+			return ret;
 		}
 		default:{
 			return context;
@@ -343,62 +338,62 @@ _setAttrTarget = function(attr, node){
 },
 // Relation Filter
 FILTER = {
-	'': function(result, selector, context){
+	'': function(ret, selector, context){
 		var i = 0, node, nodes = context.getElementsByTagName(selector.tag) || [];
 		while ((node = nodes[i++])) 
-			if (_detector(selector, node, null)) result.push(node);
+			if (_detector(selector, node, null)) ret.push(node);
 	},
-	'#': function(result, selector, context){
+	'#': function(ret, selector, context){
 		var node = (context.ownerDocument || document).getElementById(selector.id);
 		if (node && _tagChk(selector, node) && _detector(selector, node, null)) {
-			if (selector.prev == null) result.push(node);
-			else if (_contains(context, node)) result.push(node);
+			if (selector.prev == null) ret.push(node);
+			else if (_contains(context, node)) ret.push(node);
 			throw $break;
 		}
 	},
-	'>': function(result, selector, context){
+	'>': function(ret, selector, context){
 		var i = 0, j = 1, node, children = context.childNodes || [];
 		while ((node = children[i++])) 
-			if (node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, j++)) result.push(node);
+			if (node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, j++)) ret.push(node);
 	},
-	'+': function(result, selector, context){
+	'+': function(ret, selector, context){
 		var node = context;
 		while ((node = node.nextSibling)) 
 			if (node.nodeType == 1) {
-				if (_tagChk(selector, node) && _detector(selector, node, null)) result.push(node);
+				if (_tagChk(selector, node) && _detector(selector, node, null)) ret.push(node);
 				break;
 			}
 	},
-	'~': function(result, selector, context){
+	'~': function(ret, selector, context){
 		var node = context;
 		while ((node = node.nextSibling)) 
-			if (node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, null)) result.push(node);
+			if (node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, null)) ret.push(node);
 	}
 },
 // Result detector : call by filter
 DETECTOR = {
 	':': function(node, data, index){
-		var result = true, i = 0, frag;
-		while (result && (frag = data[i++])) {
+		var ret = true, i = 0, frag;
+		while (ret && (frag = data[i++])) {
 			var probe = PROBE.PSEUDO[frag.name.toLowerCase()];
-			result = probe ? probe(node, frag.value, index) : false;
+			ret = probe ? probe(node, frag.value, index) : false;
 		}
-		return result;
+		return ret;
 	},
 	'.': function(node, data, index){
 		if(!node.className) return false;
-		var result = true, i = 0, frag, classes = ' ' + node.className + ' ';
-		while (result && (frag = data[i++]))
-			result = classes.indexOf(frag) > -1;
-		return result;
+		var ret = true, i = 0, frag, classes = ' ' + node.className + ' ';
+		while (ret && (frag = data[i++]))
+			ret = classes.indexOf(frag) > -1;
+		return ret;
 	},
 	'[]': function(node, data, index){
-		var result = true, i = 0, attr;
-		while (result && (attr = data[i++])) {
+		var ret = true, i = 0, attr;
+		while (ret && (attr = data[i++])) {
 			attr = _setAttrTarget(attr, node);
-			result = PROBE.ATTR[attr.expr](attr.target, attr.value);
+			ret = PROBE.ATTR[attr.expr](attr.target, attr.value);
 		}
-		return result;
+		return ret;
 	}
 },
 // Element probe : call by detector
