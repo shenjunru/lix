@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.3.2 build 20090609
+ * Version: 1.0.3.3 build 20090629
  * 
  * Copyright (c) 2009 Shen Junru
  * Released under the MIT, BSD, and GPL Licenses.
@@ -34,11 +34,11 @@ PATTERN = {
 },
 $break = {},
 // Throw Syntax Error
-_syntaxError = function(i){
+syntaxErr = function(i){
 	return new SyntaxError('css parse error, char:' + i);
 },
 // Bind data to Selector Object
-_model = {
+model = {
 	'.': function(selector, match, i){
 		selector.detector['.'] = selector.detector['.'] || [];
 		selector.detector['.'].push(match[2]);
@@ -53,7 +53,7 @@ _model = {
 				value: value
 			});
 		} catch (e) {
-			if (e != $break) throw _syntaxError(i);
+			if (e != $break) throw syntaxErr(i);
 		}
 	},
 	'[]': function(selector, match, i){
@@ -68,7 +68,7 @@ _model = {
 				target: null
 			});
 		} catch (e) {
-			if (e != $break) throw _syntaxError(i);
+			if (e != $break) throw syntaxErr(i);
 		}
 	}
 },
@@ -83,17 +83,17 @@ SUB_PARSER = {
 					// Class
 					case '.':
 						m2 = PATTERN.CLASS.exec(_str);
-						if (m2) _model['.'](ret, m2);
+						if (m2) model['.'](ret, m2);
 						break;
 					// PSEUDO
 					case ':':
 						m2 = PATTERN.PSEUDO.exec(_str);
-						if (m2) _model[':'](ret, m2);
+						if (m2) model[':'](ret, m2);
 						break;
 					// Attr
 					case '[':
 						m2 = PATTERN.ATTR.exec(_str);
-						if (m2) _model['[]'](ret, m2);
+						if (m2) model['[]'](ret, m2);
 						break;
 				}
 				i += (m2 ? m2[0] : _str).length;
@@ -132,13 +132,13 @@ SUB_PARSER = {
 		}
 	}
 },
-_parseCSS = function(str){
+parseCSS = function(str){
 	var ret = [], i = 0, l = str.length, g = 0, ng = true, _str, m1, m2, sl, _sl;
 	while (i < l) {
 		_str = str.slice(i, l), m1 = PATTERN.CHAR.exec(_str);
 		
 		// Throw Syntax Error
-		if (!m1) throw _syntaxError(i);
+		if (!m1) throw syntaxErr(i);
 		
 		sl = new Selector(), sl.group = g;
 		switch (m1[1]) {
@@ -165,18 +165,18 @@ _parseCSS = function(str){
 				if (m2) {
 					if (m2[1] && _sl) _sl.next = sl, sl.prev = _sl;
 					else sl = _sl || sl;
-					_model['.'](sl, m2, i);
+					model['.'](sl, m2, i);
 				}
 				break;
 			// PSEUDO
 			case ':':
 				m2 = PATTERN.PSEUDO.exec(_str);
-				if (m2) sl = _sl || sl, _model[':'](sl, m2, i);
+				if (m2) sl = _sl || sl, model[':'](sl, m2, i);
 				break;
 			// Attr
 			case '[':
 				m2 = PATTERN.ATTR.exec(_str);
-				if (m2) sl = _sl || sl, _model['[]'](sl, m2, i);
+				if (m2) sl = _sl || sl, model['[]'](sl, m2, i);
 				break;
 			// Group split
 			case ',':
@@ -193,7 +193,7 @@ _parseCSS = function(str){
 				break;
 		}
 		// Throw Syntax Error
-		if (!m2) throw _syntaxError(i);
+		if (!m2) throw syntaxErr(i);
 		i += m2[0].length;
 		if (ng && (_sl || sl)) ret.push(_sl || sl), ng = false;
 		_sl = sl;
@@ -205,29 +205,22 @@ _parseCSS = function(str){
 if (!document.nodeType) document.nodeType = 9;
 
 // CSS query engine
-var LiX = function(selector, context){
-	context = _toElems(context || document);
+var LiX = window.LiX = function(selector, context){
+	context = [context || document];
 	var ret = [];
-	
-	if (selector.nodeType) {
-		// Handle: DOM Node
-		ret.push(selector);
-	} else if (typeof(selector) === 'string') {
-		// Handle: String
+	if (typeof(selector) === 'string' && isElem(context[0])) {
 		try {
-			var stack = _parseCSS(selector), i = 0, frag;
-			while ((frag = stack[i++])) 
-				_query(ret, frag, context);
+			var stack = parseCSS(selector), i = 0, frag;
+			while (frag = stack[i++]) 
+				query(ret, frag, context);
 		} catch (e) {
 			throw e;
 		}
-	} else {
-		ret = _toElems(selector);
 	}
 	return ret;
 },
-_cache = {},
-_query = function(ret, selector, context){
+cache = {},
+query = function(ret, selector, context){
 	var next = selector.next;
 	if (next) {
 		var current = [], i = 0;
@@ -238,20 +231,20 @@ _query = function(ret, selector, context){
 		selector.next = next;
 	} else {
 		if(!context.length) context = document;
-		var i = 0, temp, _context = _contextFilter(selector, context);
-		_cache = {};
+		var i = 0, temp, _context = contextFilter(selector, context);
+		cache = {};
 		try {
-			while ((temp = _context[i++])) 
+			while (temp = _context[i++]) 
 				if (temp.nodeType) FILTER[selector.filter](ret, selector, temp);
 		} catch (e) {
 			if (e != $break) throw e;
 		}
 	}
 },
-_tagChk = function(selector, node){
+tagChk = function(selector, node){
 	return selector.tag == '*' ? true : node.tagName.toLowerCase() == selector.tag.toLowerCase();
 },
-_detector = function(selector, node, index){
+detector = function(selector, node, index){
 	var expr, ret = true;
 	// class, pseudo, attr check
 	for (expr in selector.detector) {
@@ -260,58 +253,57 @@ _detector = function(selector, node, index){
 	}
 	return ret;
 },
-_AttrMap = {
+AttrMap = {
 	'class': 'className',
 	'for': 'htmlFor',
 	'id': 'id'
 },
-_isElem = function(obj){
+isXML = function(elem){
+	return elem.nodeType === 9 && elem.documentElement.nodeName !== "HTML" ||
+		!!elem.ownerDocument && elem.ownerDocument.documentElement.nodeName !== "HTML";
+},
+isElem = function(obj){
 	return (obj && (obj.nodeType === 1 || obj.nodeType === 9));
 },
-_toElems = function(obj){
-	var ret = [];
-	if (obj != null) {
-		if (_isElem(obj)) return [obj];
-		if (obj.length && typeof(obj) !== 'string' && typeof(obj) !== 'function' && !obj.setInterval) {
-			for (var i = 0; i < obj.length; i++) 
-				if (_isElem(obj[i])) ret.push(obj[i]);
-		}
+contains = (function(){
+	if (document.documentElement.compareDocumentPosition) return function(ancestor, descendant){
+		return (ancestor.compareDocumentPosition(descendant) & 16) === 16;
 	}
-	return ret;
-},
-_contains = function(ancestor, descendant){
-	if (ancestor.compareDocumentPosition) return (ancestor.compareDocumentPosition(descendant) & 16) === 16;
-	if (ancestor.contains) return ancestor.contains(descendant) && ancestor !== descendant;
-	while (descendant = descendant.parentNode) 
-		if (descendant == ancestor) return true;
-	return false;
-},
-_getNodeIndex = function(node){
+	if (document.documentElement.contains) return function(ancestor, descendant){
+		return ancestor.contains(descendant) && ancestor !== descendant;
+	};
+	return function(ancestor, descendant){
+		while (descendant = descendant.parentNode) 
+			if (descendant == ancestor) return true;
+		return false;
+	}
+})(),
+getNodeIndex = function(node){
 	var i = 0, tmp = node.parentNode.firstChild;
-	if (_cache.node && _cache.node.parentNode === node.parentNode) i = _cache.index, tmp = _cache.node;
+	if (cache.node && cache.node.parentNode === node.parentNode) i = cache.index, tmp = cache.node;
 	
 	for (; tmp; tmp = tmp.nextSibling) 
 		if (tmp === node) {
-			_cache.node = node, _cache.index = i;
+			cache.node = node, cache.index = i;
 			return ++i;
 		} else if (tmp.nodeType === 1) ++i;
 },
-_contextFilter = function(selector, context){
+contextFilter = function(selector, context){
 	var node, prevNode, i = 0, ret = [];
 	switch (selector.filter) {
 		case '~':{
-			while ((node = context[i++])) 
+			while (node = context[i++]) 
 				if (node.nodeType) {ret.push(node);break;}
-			while ((prevNode = node, node = context[i++]))
-				if (_contains(prevNode, node)) ret.push(node);
+			while (prevNode = node, node = context[i++])
+				if (contains(prevNode, node)) ret.push(node);
 			return ret;
 		}
 		case '':{
-			while ((node = context[i++])) 
+			while (node = context[i++]) 
 				if (node.nodeType) {ret.push(node);break;}
-			while ((prevNode = node, node = context[i++]))
-				if (_contains(node, prevNode)) ret = [node];
-				else if (!_contains(prevNode, node)) ret.push(node);
+			while (prevNode = node, node = context[i++])
+				if (contains(node, prevNode)) ret = [node];
+				else if (!contains(prevNode, node)) ret.push(node);
 			return ret;
 		}
 		default:{
@@ -319,12 +311,12 @@ _contextFilter = function(selector, context){
 		}
 	}
 },
-_getAttr = function(node, name){
-	if (name in _AttrMap) return node[_AttrMap[name]];
+getAttr = function(node, name){
+	if (name in AttrMap) return node[AttrMap[name]];
 	return node.getAttribute(name);
 },
-_setAttrTarget = function(attr, node){
-	var target = _getAttr(node, attr.name);
+setAttrTarget = function(attr, node){
+	var target = getAttr(node, attr.name);
 	switch (attr.name) {
 		case 'class':{
 			attr.target = target ? ' ' + target + ' ' : null;
@@ -340,34 +332,34 @@ _setAttrTarget = function(attr, node){
 FILTER = {
 	'': function(ret, selector, context){
 		var i = 0, node, nodes = context.getElementsByTagName(selector.tag) || [];
-		while ((node = nodes[i++])) 
-			if (_detector(selector, node, null)) ret.push(node);
+		while (node = nodes[i++]) 
+			if (detector(selector, node, null)) ret.push(node);
 	},
 	'#': function(ret, selector, context){
 		var node = (context.ownerDocument || document).getElementById(selector.id);
-		if (node && _tagChk(selector, node) && _detector(selector, node, null)) {
+		if (node && node.getAttributeNode('id') && tagChk(selector, node) && detector(selector, node, null)) {
 			if (selector.prev == null) ret.push(node);
-			else if (_contains(context, node)) ret.push(node);
+			else if (contains(context, node)) ret.push(node);
 			throw $break;
 		}
 	},
 	'>': function(ret, selector, context){
 		var i = 0, j = 1, node, children = context.childNodes || [];
-		while ((node = children[i++])) 
-			if (node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, j++)) ret.push(node);
+		while (node = children[i++]) 
+			if (node.nodeType == 1 && tagChk(selector, node) && detector(selector, node, j++)) ret.push(node);
 	},
 	'+': function(ret, selector, context){
 		var node = context;
-		while ((node = node.nextSibling)) 
+		while (node = node.nextSibling) 
 			if (node.nodeType == 1) {
-				if (_tagChk(selector, node) && _detector(selector, node, null)) ret.push(node);
+				if (tagChk(selector, node) && detector(selector, node, null)) ret.push(node);
 				break;
 			}
 	},
 	'~': function(ret, selector, context){
 		var node = context;
-		while ((node = node.nextSibling)) 
-			if (node.nodeType == 1 && _tagChk(selector, node) && _detector(selector, node, null)) ret.push(node);
+		while (node = node.nextSibling) 
+			if (node.nodeType == 1 && tagChk(selector, node) && detector(selector, node, null)) ret.push(node);
 	}
 },
 // Result detector : call by filter
@@ -390,7 +382,7 @@ DETECTOR = {
 	'[]': function(node, data, index){
 		var ret = true, i = 0, attr;
 		while (ret && (attr = data[i++])) {
-			attr = _setAttrTarget(attr, node);
+			attr = setAttrTarget(attr, node);
 			ret = PROBE.ATTR[attr.expr](attr.target, attr.value);
 		}
 		return ret;
@@ -473,43 +465,16 @@ PSEUDO: {
 	},
 	'nth-child': function(node, value, index){
 		// if (value.a == 1 && value.b == 0) return true;
-		var diff = (index || _getNodeIndex(node)) - value.b;
+		var diff = (index || getNodeIndex(node)) - value.b;
 		if (value.a == 0) return diff == 0;
 		else return (diff % value.a == 0 && diff / value.a >= 0);
 	},
 	// Other
 	header: function(node){return /h\d/i.test(node.nodeName);},
-	not: function(node, value, index){return !_detector(value, node, index);}
+	not: function(node, value, index){return !detector(value, node, index);}
 }
 };
 
 // add functions to LiX
-LiX.parseCSS = _parseCSS;
-LiX.regPseudo = (function(){
-	function reg(target, from){
-		var name, fn;
-		for (name in from) {
-			fn = from[name], name = name.toLowerCase();
-			if (typeof fn == 'function' && !(name in target)) target[name] = fn;
-		}
-	}
-	return function(obj){
-		for (var name in obj) {
-			switch (name.toLowerCase()) {
-				case 'parser':
-					reg(SUB_PARSER[':'], obj[name]);
-					break;
-				case 'probe':
-					reg(PROBE.PSEUDO, obj[name]);
-					break;
-			}
-		}
-	}
-})();
-
-// Expose
-window.LiX = LiX;
-window.$ = function(selector, context){
-	return new LiX(selector, context);
-};
+LiX.parseCSS = parseCSS;
 })();
