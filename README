@@ -1,5 +1,8 @@
 A pure-JavaScript CSS selector engine designed to be easily dropped in to a host library.
 
+Functions
+	- LiX(string [, element]) : Array
+
 Discussion
 	http://groups.google.com/group/lixjs
 
