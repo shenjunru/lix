@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.3.3 build 20090629
+ * Version: 1.0.3.4 build 20090630
  * 
  * Copyright (c) 2009 Shen Junru
  * Released under the MIT, BSD, and GPL Licenses.
@@ -208,7 +208,7 @@ if (!document.nodeType) document.nodeType = 9;
 var LiX = window.LiX = function(selector, context){
 	context = [context || document];
 	var ret = [];
-	if (typeof(selector) === 'string' && isElem(context[0])) {
+	if (typeof(selector) == 'string' && isElem(context[0])) {
 		try {
 			var stack = parseCSS(selector), i = 0, frag;
 			while (frag = stack[i++]) 
@@ -219,7 +219,7 @@ var LiX = window.LiX = function(selector, context){
 	}
 	return ret;
 },
-cache = {},
+lixCache = 0,
 query = function(ret, selector, context){
 	var next = selector.next;
 	if (next) {
@@ -232,7 +232,7 @@ query = function(ret, selector, context){
 	} else {
 		if(!context.length) context = document;
 		var i = 0, temp, _context = contextFilter(selector, context);
-		cache = {};
+		lixCache++;
 		try {
 			while (temp = _context[i++]) 
 				if (temp.nodeType) FILTER[selector.filter](ret, selector, temp);
@@ -259,18 +259,18 @@ AttrMap = {
 	'id': 'id'
 },
 isXML = function(elem){
-	return elem.nodeType === 9 && elem.documentElement.nodeName !== "HTML" ||
-		!!elem.ownerDocument && elem.ownerDocument.documentElement.nodeName !== "HTML";
+	return elem.nodeType == 9 && elem.documentElement.nodeName != "HTML" ||
+		!!elem.ownerDocument && elem.ownerDocument.documentElement.nodeName != "HTML";
 },
 isElem = function(obj){
-	return (obj && (obj.nodeType === 1 || obj.nodeType === 9));
+	return (obj && (obj.nodeType == 1 || obj.nodeType == 9));
 },
 contains = (function(){
 	if (document.documentElement.compareDocumentPosition) return function(ancestor, descendant){
-		return (ancestor.compareDocumentPosition(descendant) & 16) === 16;
+		return (ancestor.compareDocumentPosition(descendant) & 16) == 16;
 	}
 	if (document.documentElement.contains) return function(ancestor, descendant){
-		return ancestor.contains(descendant) && ancestor !== descendant;
+		return ancestor.contains(descendant) && ancestor != descendant;
 	};
 	return function(ancestor, descendant){
 		while (descendant = descendant.parentNode) 
@@ -279,14 +279,13 @@ contains = (function(){
 	}
 })(),
 getNodeIndex = function(node){
-	var i = 0, tmp = node.parentNode.firstChild;
-	if (cache.node && cache.node.parentNode === node.parentNode) i = cache.index, tmp = cache.node;
-	
-	for (; tmp; tmp = tmp.nextSibling) 
-		if (tmp === node) {
-			cache.node = node, cache.index = i;
-			return ++i;
-		} else if (tmp.nodeType === 1) ++i;
+	var i = 0, pn = node.parentNode, cn = pn.firstChild;
+	if (lixCache != pn._lixCache) {
+		for (; cn; cn = cn.nextSibling) 
+			if (cn.nodeType == 1) cn.nodeIndex = ++i;
+		pn._lixCache = lixCache;
+	}
+	return node.nodeIndex;
 },
 contextFilter = function(selector, context){
 	var node, prevNode, i = 0, ret = [];
@@ -405,38 +404,38 @@ ATTR: {
 		return target ? (' ' + target + ' ').indexOf(value) >= 0 : false;
 	},
 	'^=': function(target, value){
-		return target ? target.indexOf(value) === 0 : false;
+		return target ? target.indexOf(value) == 0 : false;
 	},
 	'$=': function(target, value){
-		return target ? target.substr(target.length - value.length) === value : false;
+		return target ? target.substr(target.length - value.length) == value : false;
 	},
 	'*=': function(target, value){
 		return target ? target.indexOf(value) >= 0 : false;
 	},
 	'|=': function(target, value){
-		return target ? target === value || target.substr(0, value.length + 1) === value + '-' : false;
+		return target ? target == value || target.substr(0, value.length + 1) == value + '-' : false;
 	}
 },
 // PSEUDO probe
 PSEUDO: {
 	// Form Element
-	button: function(node){return 'button' === node.type || node.nodeName.toUpperCase() === 'BUTTON';},
-	checkbox: function(node){return 'checkbox' === node.type;},
-	file: function(node){return 'file' === node.type;},
-	image: function(node){return 'image' === node.type;},
+	button: function(node){return 'button' == node.type || node.nodeName.toUpperCase() == 'BUTTON';},
+	checkbox: function(node){return 'checkbox' == node.type;},
+	file: function(node){return 'file' == node.type;},
+	image: function(node){return 'image' == node.type;},
 	input: function(node){return /input|select|textarea|button/i.test(node.nodeName);},
-	password: function(node){return 'password' === node.type;},
-	radio: function(node){return 'radio' === node.type;},
-	reset: function(node){return 'reset' === node.type;},
-	submit: function(node){return 'submit' === node.type;},
-	text: function(node){return 'text' === node.type;},
+	password: function(node){return 'password' == node.type;},
+	radio: function(node){return 'radio' == node.type;},
+	reset: function(node){return 'reset' == node.type;},
+	submit: function(node){return 'submit' == node.type;},
+	text: function(node){return 'text' == node.type;},
 	// Form Element State
-	enabled: function(node){return node.disabled === false && node.type !== 'hidden';},
+	enabled: function(node){return node.disabled == false && node.type != 'hidden';},
 	disabled: function(node){return true;},
-	checked: function(node){return node.checked === true;},
-	selected: function(node){return node.selected === true;},
+	checked: function(node){return node.checked == true;},
+	selected: function(node){return node.selected == true;},
 	// Visibility
-	hidden: function(node){return node.offsetWidth === 0 || node.offsetHeight === 0;},
+	hidden: function(node){return node.offsetWidth == 0 || node.offsetHeight == 0;},
 	visible: function(node){return node.offsetWidth > 0 || node.offsetHeight > 0;},
 	// Content
 	empty: function(node){return !node.firstChild;},
@@ -445,26 +444,23 @@ PSEUDO: {
 	has: function(node, value){return !!(new LiX(value, node)).length;},
 	// Child
 	'first-child': function(node){
-		while (node = node.previousSibling) 
-			if (node.nodeType === 1) return false;
-		return true;
+		while ((node = node.previousSibling) && node.nodeType != 1);
+		return !node;
 	},
-	'last-child': function(node, value, index){
-		while (node = node.nextSibling) 
-			if (node.nodeType === 1) return false;
-		return true;
+	'last-child': function(node){
+		while ((node = node.nextSibling) && node.nodeType != 1);
+		return !node;
 	},
 	'only-child': function(node){
 		var tmp = node;
 		while (tmp = tmp.previousSibling) 
-			if (tmp.nodeType === 1) return false;
+			if (tmp.nodeType == 1) return false;
 		tmp = node;
 		while (tmp = tmp.nextSibling) 
-			if (tmp.nodeType === 1) return false;
+			if (tmp.nodeType == 1) return false;
 		return true;
 	},
 	'nth-child': function(node, value, index){
-		// if (value.a == 1 && value.b == 0) return true;
 		var diff = (index || getNodeIndex(node)) - value.b;
 		if (value.a == 0) return diff == 0;
 		else return (diff % value.a == 0 && diff / value.a >= 0);
