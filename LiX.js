@@ -1,24 +1,21 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.3.4 build 20090630
+ * Version: 1.0.4 build 20090706
  * 
  * Copyright (c) 2009 Shen Junru
  * Released under the MIT, BSD, and GPL Licenses.
- * 
- * Inspiration:
- * 	- Some functionality inspired by [sizzle.js](http://sizzlejs.com)
 */
 (function(){
-// Selector Object
-var Selector = function(){
+// Selectors Frag Class
+var Frag = function(){
 	this.prev = null;
 	this.next = null;
 	this.group = 0;
 	this.tag = '*';
 	this.id = '';
-	this.filter = '';
-	this.detector = {};
+	this.type = '';
+	this.feature = {};
 },
 // CSS Pattern
 PATTERN = {
@@ -28,27 +25,27 @@ PATTERN = {
 	ID: /^(\s*)#(\*|[\w\u00c0-\uFFFF_-]+)/,
 	FILTER: /^\s*([>~+])\s*(\*|[\w\u00c0-\uFFFF_-]+)/,
 	CLASS: /^(\s*)\.([\w\d\u00C0-\uFFFF_-]+)/,
-	PSEUDO: /^\s*:(\w[\w\-]*)(?:\(([^\)]+)\))?/,
+	PSEUDO: /^\s*:(\w[\w\-]*)(?:\((?:(['"])(.+)\2|([^\)]+\(.+\))|([^\)]+))\))?/,
 	ATTR: /^\s*\[\s*([\w\d]+)\s*(?:([!~$|*^]?=)\s*([\w\d\-\.\u00C0-\uFFFF]+|"([^"]*)"|'([^']*)')\s*)?\]/,
 	NTH: /(-?)(\d*)n((?:\+|-)?\d*)/
 },
 $break = {},
-// Throw Syntax Error
+// throw syntax error
 syntaxErr = function(i){
 	return new SyntaxError('css parse error, char:' + i);
 },
-// Bind data to Selector Object
+// bind data to selector frag
 model = {
-	'.': function(selector, match, i){
-		selector.detector['.'] = selector.detector['.'] || [];
-		selector.detector['.'].push(match[2]);
+	'.': function(frag, match, i){
+		frag.feature['.'] = frag.feature['.'] || [];
+		frag.feature['.'].push(match[2]);
 	},
-	':': function(selector, match, i){
+	':': function(frag, match, i){
 		try {
-			selector.detector[':'] = selector.detector[':'] || [];
-			var name = match[1], value = match[2], parser = SUB_PARSER[':'][name];
+			frag.feature[':'] = frag.feature[':'] || [];
+			var name = match[1].toLowerCase(), value = match[5] || match[4] || match[3], parser = SUB_PARSER[':'][name];
 			if (value && parser) value = parser(value);
-			selector.detector[':'].push({
+			frag.feature[':'].push({
 				name: name,
 				value: value
 			});
@@ -56,12 +53,12 @@ model = {
 			if (e != $break) throw syntaxErr(i);
 		}
 	},
-	'[]': function(selector, match, i){
+	'[]': function(frag, match, i){
 		try {
-			selector.detector['[]'] = selector.detector['[]'] || [];
+			frag.feature['[]'] = frag.feature['[]'] || [];
 			var name = match[1], expr = match[2] || '', value = match[5] || match[4] || match[3], parser = SUB_PARSER['[]'][name];
 			if (value && parser) value = parser(expr, value);
-			selector.detector['[]'].push({
+			frag.feature['[]'].push({
 				name: name,
 				expr: expr,
 				value: value,
@@ -75,7 +72,7 @@ model = {
 SUB_PARSER = {
 	':': {
 		'not': function(str){
-			var ret = {detector:{}}, i = 0, l = str.length, _str, m1, m2;
+			var result = {feature:{}}, i = 0, l = str.length, _str, m1, m2;
 			while (i < l) {
 				_str = str.slice(i, l), m1 = PATTERN.CHAR.exec(_str);
 				if (!m1) break;
@@ -83,22 +80,22 @@ SUB_PARSER = {
 					// Class
 					case '.':
 						m2 = PATTERN.CLASS.exec(_str);
-						if (m2) model['.'](ret, m2);
+						if (m2) model['.'](result, m2);
 						break;
 					// PSEUDO
 					case ':':
 						m2 = PATTERN.PSEUDO.exec(_str);
-						if (m2) model[':'](ret, m2);
+						if (m2) model[':'](result, m2);
 						break;
 					// Attr
 					case '[':
 						m2 = PATTERN.ATTR.exec(_str);
-						if (m2) model['[]'](ret, m2);
+						if (m2) model['[]'](result, m2);
 						break;
 				}
 				i += (m2 ? m2[0] : _str).length;
 			}
-			return ret;
+			return result;
 		},
 		'nth-child': function(str){
 			if (/^\bn\b$/i.test(str)) throw $break;
@@ -133,125 +130,131 @@ SUB_PARSER = {
 	}
 },
 parseCSS = function(str){
-	var ret = [], i = 0, l = str.length, g = 0, ng = true, _str, m1, m2, sl, _sl;
+	var result = [], g = 0, i = 0, l = str.length, newGroup = true, _str, m1, m2, frag, _frag;
 	while (i < l) {
 		_str = str.slice(i, l), m1 = PATTERN.CHAR.exec(_str);
 		
 		// Throw Syntax Error
 		if (!m1) throw syntaxErr(i);
 		
-		sl = new Selector(), sl.group = g;
+		frag = new Frag(), frag._fragroup = g;
 		switch (m1[1]) {
 			// Filter
 			case '>': case '~': case '+':
 				m2 = PATTERN.FILTER.exec(_str);
 				if (m2) {
-					sl.filter = m2[1], sl.tag = m2[2];
-					if (_sl) _sl.next = sl, sl.prev = _sl;
+					frag.type = m2[1], frag.tag = m2[2];
+					if (_frag) _frag.next = frag, frag.prev = _frag;
 				}
 				break;
 			// ID
 			case '#':
 				m2 = PATTERN.ID.exec(_str);
 				if (m2) {
-					if (!m2[1]) sl = _sl || sl;
-					sl.filter = '#', sl.id = m2[2];
-					if (m2[1] && _sl) _sl.next = sl, sl.prev = _sl;
+					if (!m2[1]) frag = _frag || frag;
+					frag.type = '#', frag.id = m2[2];
+					if (m2[1] && _frag) _frag.next = frag, frag.prev = _frag;
 				}
 				break;
 			// Class
 			case '.':
 				m2 = PATTERN.CLASS.exec(_str);
 				if (m2) {
-					if (m2[1] && _sl) _sl.next = sl, sl.prev = _sl;
-					else sl = _sl || sl;
-					model['.'](sl, m2, i);
+					if (m2[1] && _frag) _frag.next = frag, frag.prev = _frag;
+					else frag = _frag || frag;
+					model['.'](frag, m2, i);
 				}
 				break;
 			// PSEUDO
 			case ':':
 				m2 = PATTERN.PSEUDO.exec(_str);
-				if (m2) sl = _sl || sl, model[':'](sl, m2, i);
+				if (m2) frag = _frag || frag, model[':'](frag, m2, i);
 				break;
 			// Attr
 			case '[':
 				m2 = PATTERN.ATTR.exec(_str);
-				if (m2) sl = _sl || sl, model['[]'](sl, m2, i);
+				if (m2) frag = _frag || frag, model['[]'](frag, m2, i);
 				break;
 			// Group split
 			case ',':
 				m2 = PATTERN.SPLIT.exec(_str);
-				if (m2) ng = true, g++, _sl = sl = null;
+				if (m2) newGroup = true, g++, _frag = frag = null;
 				break;
 			// Tag
 			default:
 				m2 = PATTERN.TAG.exec(_str);
 				if (m2) {
-					sl.tag = m2[1];
-					if (_sl) _sl.next = sl, sl.prev = _sl;
+					frag.tag = m2[1];
+					if (_frag) _frag.next = frag, frag.prev = _frag;
 				}
 				break;
 		}
 		// Throw Syntax Error
 		if (!m2) throw syntaxErr(i);
 		i += m2[0].length;
-		if (ng && (_sl || sl)) ret.push(_sl || sl), ng = false;
-		_sl = sl;
+		if (newGroup && (_frag || frag)) result.push(_frag || frag), newGroup = false;
+		_frag = frag;
 	}
-	return ret;
+	return result;
 };
 
-// Fix document.nodeType in IE5.5
+// fix document.nodeType in IE5.5
 if (!document.nodeType) document.nodeType = 9;
 
-// CSS query engine
+// CSS Selectors Query Engine
 var LiX = window.LiX = function(selector, context){
 	context = [context || document];
-	var ret = [];
+	var result = [];
 	if (typeof(selector) == 'string' && isElem(context[0])) {
 		try {
+			lixCache = 0, lixIndex++;
 			var stack = parseCSS(selector), i = 0, frag;
 			while (frag = stack[i++]) 
-				query(ret, frag, context);
+				query(result, frag, context);
 		} catch (e) {
 			throw e;
 		}
 	}
-	return ret;
+	return result;
 },
-lixCache = 0,
-query = function(ret, selector, context){
-	var next = selector.next;
+lixCache = 0, // for compute node index
+lixIndex = 0, // for no duplicate
+query = function(result, frag, context){
+	var next = frag.next;
 	if (next) {
 		var current = [], i = 0;
-		selector.next = null;
-		arguments.callee(current, selector, context);
-		current.lenght == 0 || arguments.callee(ret, next, current);
-		// restore the selector link
-		selector.next = next;
+		frag.next = null;
+		arguments.callee(current, frag, context);
+		current.lenght == 0 || arguments.callee(result, next, current);
+		// restore the selector frag link
+		frag.next = next;
 	} else {
 		if(!context.length) context = document;
-		var i = 0, temp, _context = contextFilter(selector, context);
+		var i = 0, temp, _context = contextFilter(frag, context);
 		lixCache++;
 		try {
 			while (temp = _context[i++]) 
-				if (temp.nodeType) FILTER[selector.filter](ret, selector, temp);
+				if (temp.nodeType) FILTER[frag.type](result, frag, temp);
 		} catch (e) {
 			if (e != $break) throw e;
 		}
 	}
 },
-tagChk = function(selector, node){
-	return selector.tag == '*' ? true : node.tagName.toLowerCase() == selector.tag.toLowerCase();
+push = function(result, node){
+	// for no duplicate
+	if (lixIndex != node._lixIndex) node._lixIndex = lixIndex, result.push(node);
 },
-detector = function(selector, node, index){
-	var expr, ret = true;
+tagChk = function(frag, node){
+	return frag.tag == '*' ? true : node.nodeName.toLowerCase() == frag.tag.toLowerCase();
+},
+detect = function(frag, node, index){
+	var expr, result = true;
 	// class, pseudo, attr check
-	for (expr in selector.detector) {
-		if (!ret) break;
-		ret = DETECTOR[expr](node, selector.detector[expr], index);
+	for (expr in frag.feature) {
+		if (!result) break;
+		result = DETECTOR[expr](node, frag.feature[expr], index);
 	}
-	return ret;
+	return result;
 },
 AttrMap = {
 	'class': 'className',
@@ -287,23 +290,23 @@ getNodeIndex = function(node){
 	}
 	return node.nodeIndex;
 },
-contextFilter = function(selector, context){
-	var node, prevNode, i = 0, ret = [];
-	switch (selector.filter) {
+contextFilter = function(frag, context){
+	var node, prevNode, i = 0, result = [];
+	switch (frag.type) {
 		case '~':{
 			while (node = context[i++]) 
-				if (node.nodeType) {ret.push(node);break;}
+				if (node.nodeType) {result.push(node);break;}
 			while (prevNode = node, node = context[i++])
-				if (contains(prevNode, node)) ret.push(node);
-			return ret;
+				if (contains(prevNode, node)) result.push(node);
+			return result;
 		}
 		case '':{
 			while (node = context[i++]) 
-				if (node.nodeType) {ret.push(node);break;}
+				if (node.nodeType) {result.push(node);break;}
 			while (prevNode = node, node = context[i++])
-				if (contains(node, prevNode)) ret = [node];
-				else if (!contains(prevNode, node)) ret.push(node);
-			return ret;
+				if (contains(node, prevNode)) result = [node];
+				else if (!contains(prevNode, node)) result.push(node);
+			return result;
 		}
 		default:{
 			return context;
@@ -329,65 +332,64 @@ setAttrTarget = function(attr, node){
 },
 // Relation Filter
 FILTER = {
-	'': function(ret, selector, context){
-		var i = 0, node, nodes = context.getElementsByTagName(selector.tag) || [];
+	'': function(result, frag, context){
+		var i = 0, node, nodes = context.getElementsByTagName(frag.tag) || [];
 		while (node = nodes[i++]) 
-			if (detector(selector, node, null)) ret.push(node);
+			if (detect(frag, node, null)) push(result, node);
 	},
-	'#': function(ret, selector, context){
-		var node = (context.ownerDocument || document).getElementById(selector.id);
-		if (node && node.getAttributeNode('id') && tagChk(selector, node) && detector(selector, node, null)) {
-			if (selector.prev == null) ret.push(node);
-			else if (contains(context, node)) ret.push(node);
+	'#': function(result, frag, context){
+		var node = (context.ownerDocument || document).getElementById(frag.id);
+		if (node && node.getAttributeNode('id') && tagChk(frag, node) && detect(frag, node, null)) {
+			if (frag.prev == null || contains(context, node)) push(result, node);
 			throw $break;
 		}
 	},
-	'>': function(ret, selector, context){
+	'>': function(result, frag, context){
 		var i = 0, j = 1, node, children = context.childNodes || [];
 		while (node = children[i++]) 
-			if (node.nodeType == 1 && tagChk(selector, node) && detector(selector, node, j++)) ret.push(node);
+			if (node.nodeType == 1 && tagChk(frag, node) && detect(frag, node, j++)) push(result, node);
 	},
-	'+': function(ret, selector, context){
+	'+': function(result, frag, context){
 		var node = context;
 		while (node = node.nextSibling) 
 			if (node.nodeType == 1) {
-				if (tagChk(selector, node) && detector(selector, node, null)) ret.push(node);
+				if (tagChk(frag, node) && detect(frag, node, null)) push(result, node);
 				break;
 			}
 	},
-	'~': function(ret, selector, context){
+	'~': function(result, frag, context){
 		var node = context;
 		while (node = node.nextSibling) 
-			if (node.nodeType == 1 && tagChk(selector, node) && detector(selector, node, null)) ret.push(node);
+			if (node.nodeType == 1 && tagChk(frag, node) && detect(frag, node, null)) push(result, node);
 	}
 },
-// Result detector : call by filter
+// Feature detect
 DETECTOR = {
 	':': function(node, data, index){
-		var ret = true, i = 0, frag;
-		while (ret && (frag = data[i++])) {
+		var result = true, i = 0, frag;
+		while (result && (frag = data[i++])) {
 			var probe = PROBE.PSEUDO[frag.name.toLowerCase()];
-			ret = probe ? probe(node, frag.value, index) : false;
+			result = probe ? probe(node, frag.value, index) : false;
 		}
-		return ret;
+		return result;
 	},
 	'.': function(node, data, index){
 		if(!node.className) return false;
-		var ret = true, i = 0, frag, classes = ' ' + node.className + ' ';
-		while (ret && (frag = data[i++]))
-			ret = classes.indexOf(frag) > -1;
-		return ret;
+		var result = true, i = 0, frag, classes = ' ' + node.className + ' ';
+		while (result && (frag = data[i++]))
+			result = classes.indexOf(frag) > -1;
+		return result;
 	},
 	'[]': function(node, data, index){
-		var ret = true, i = 0, attr;
-		while (ret && (attr = data[i++])) {
+		var result = true, i = 0, attr;
+		while (result && (attr = data[i++])) {
 			attr = setAttrTarget(attr, node);
-			ret = PROBE.ATTR[attr.expr](attr.target, attr.value);
+			result = PROBE.ATTR[attr.expr](attr.target, attr.value);
 		}
-		return ret;
+		return result;
 	}
 },
-// Element probe : call by detector
+// Node probe : call by DETECTOR
 PROBE = {
 // Attribute probe
 ATTR: {
@@ -418,7 +420,7 @@ ATTR: {
 },
 // PSEUDO probe
 PSEUDO: {
-	// Form Element
+	// form element
 	button: function(node){return 'button' == node.type || node.nodeName.toUpperCase() == 'BUTTON';},
 	checkbox: function(node){return 'checkbox' == node.type;},
 	file: function(node){return 'file' == node.type;},
@@ -429,20 +431,20 @@ PSEUDO: {
 	reset: function(node){return 'reset' == node.type;},
 	submit: function(node){return 'submit' == node.type;},
 	text: function(node){return 'text' == node.type;},
-	// Form Element State
+	// form element state
 	enabled: function(node){return node.disabled == false && node.type != 'hidden';},
 	disabled: function(node){return true;},
 	checked: function(node){return node.checked == true;},
 	selected: function(node){return node.selected == true;},
-	// Visibility
+	// visibility
 	hidden: function(node){return node.offsetWidth == 0 || node.offsetHeight == 0;},
 	visible: function(node){return node.offsetWidth > 0 || node.offsetHeight > 0;},
-	// Content
+	// content
 	empty: function(node){return !node.firstChild;},
 	parent: function(node){return !!node.firstChild;},
 	contains: function(node, value){return (node.textContent || node.innerText || '').indexOf(value) >= 0;},
 	has: function(node, value){return !!(new LiX(value, node)).length;},
-	// Child
+	// child
 	'first-child': function(node){
 		while ((node = node.previousSibling) && node.nodeType != 1);
 		return !node;
@@ -460,14 +462,17 @@ PSEUDO: {
 			if (tmp.nodeType == 1) return false;
 		return true;
 	},
+	// index
 	'nth-child': function(node, value, index){
 		var diff = (index || getNodeIndex(node)) - value.b;
 		if (value.a == 0) return diff == 0;
 		else return (diff % value.a == 0 && diff / value.a >= 0);
 	},
-	// Other
+	'gth-child': function(node, value, index){return value < (index || getNodeIndex(node));},
+	'lth-child': function(node, value, index){return value > (index || getNodeIndex(node));},
+	// other
 	header: function(node){return /h\d/i.test(node.nodeName);},
-	not: function(node, value, index){return !detector(value, node, index);}
+	not: function(node, value, index){return !detect(value, node, index);}
 }
 };
 
