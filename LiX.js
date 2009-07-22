@@ -1,14 +1,23 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.4 build 20090706
+ * Version: 1.0.5 build 20090723
  * 
- * Copyright (c) 2009 Shen Junru
+ * Copyright (c) 2009 Shen Junru (XFSN)
  * Released under the MIT, BSD, and GPL Licenses.
 */
+
 (function(){
-// Selectors Frag Class
-var Frag = function(){
+// fix document.nodeType in IE5.5
+if (!document.nodeType) document.nodeType = 9;
+
+var
+/**
+ * @class Selector Fragment
+ * @constructor
+ * @private
+ */
+Frag = function(){
 	this.prev = null;
 	this.next = null;
 	this.group = 0;
@@ -17,47 +26,152 @@ var Frag = function(){
 	this.type = '';
 	this.feature = {};
 },
-// CSS Pattern
+// the patterns for selector fragment.
 PATTERN = {
-	CHAR: /^\s*([>~+#\*\w\u00c0-\uFFFF_\-.:\[,])/,
-	SPLIT: /^\s*,\s*/,
-	TAG: /^\s*(\*|[\w\u00c0-\uFFFF_-]+)/,
-	ID: /^(\s*)#(\*|[\w\u00c0-\uFFFF_-]+)/,
-	FILTER: /^\s*([>~+])\s*(\*|[\w\u00c0-\uFFFF_-]+)/,
-	CLASS: /^(\s*)\.([\w\d\u00C0-\uFFFF_-]+)/,
-	PSEUDO: /^\s*:(\w[\w\-]*)(?:\((?:(['"])(.+)\2|([^\)]+\(.+\))|([^\)]+))\))?/,
-	ATTR: /^\s*\[\s*([\w\d]+)\s*(?:([!~$|*^]?=)\s*([\w\d\-\.\u00C0-\uFFFF]+|"([^"]*)"|'([^']*)')\s*)?\]/,
+	CHAR: /^\s*([>~+#*.:[,\w\u00c0-\uFFFF])/,
+	GROUP: /^\s*,\s*/,
+	TAG: /^\s*(\*|[\w\u00c0-\uFFFF-]+)/,
+	ID: /^(\s*)#(\*|[\w\u00c0-\uFFFF-]+)/,
+	FILTER: /^\s*([>~+])\s*(\*|[\w\u00c0-\uFFFF-]+)/,
+	CLASS: /^(\s*)\.([\w\d\u00C0-\uFFFF-]+)/,
+	PSEUDO: /^\s*:(\w[\w-]*)(?:\((?:(['"])(.+)\2|([^\)]+\(.+\))|([^\)]+))\))?/,
+	ATTR: /^\s*\[\s*([\w\d]+)\s*(?:([!~$|*^]?=)\s*([\w\d\u00C0-\uFFFF.-]+|"([^"]*)"|'([^']*)')\s*)?\]/,
 	NTH: /(-?)(\d*)n((?:\+|-)?\d*)/
 },
 $break = {},
-// throw syntax error
-syntaxErr = function(i){
-	return new SyntaxError('css parse error, char:' + i);
+/**
+ * Creates syntax error message with start index of error fragment in the selector.
+ * @param {Number} i start index of error fragment
+ * @param {Object} e
+ * @returns syntax error object
+ * @type {SyntaxError}
+ * @private
+ */
+syntaxErr = function(i, e){
+	return e && e instanceof SyntaxError ? e : new SyntaxError('css parse error, char:' + i);
 },
-// bind data to selector frag
-model = {
-	'.': function(frag, match, i){
+/**
+ * The method of parse CSS selectors string to JavaScript object.
+ * @param {String} selector
+ * @return an array of selector fragments
+ * @type {Array} 
+ */
+parseSelector = function(selector, ei){
+	ei = ei || 0;
+	var result = [], g = 0, i = 0, l = selector.length, newGroup = true, _selector, m1, m2, frag, _frag;
+	while (i < l) {
+		_selector = selector.slice(i, l), m1 = PATTERN.CHAR.exec(_selector);
+		
+		// throw syntax error
+		if (!m1) throw syntaxErr(ei);
+		
+		frag = new Frag(), frag._fragroup = g;
+		switch (m1[1]) {
+			// Filter
+			case '>': case '~': case '+':
+				m2 = PATTERN.FILTER.exec(_selector);
+				if (m2) {
+					frag.type = m2[1], frag.tag = m2[2];
+					if (_frag) _frag.next = frag, frag.prev = _frag;
+				}
+				break;
+			// ID
+			case '#':
+				m2 = PATTERN.ID.exec(_selector);
+				if (m2) {
+					if (!m2[1]) frag = _frag || frag;
+					frag.type = '#', frag.id = m2[2];
+					if (m2[1] && _frag) _frag.next = frag, frag.prev = _frag;
+				}
+				break;
+			// Class
+			case '.':
+				m2 = PATTERN.CLASS.exec(_selector);
+				if (m2) {
+					if (m2[1] && _frag) _frag.next = frag, frag.prev = _frag;
+					else frag = _frag || frag;
+					PARSER.CLASS(frag, m2, ei);
+				}
+				break;
+			// PSEUDO
+			case ':':
+				m2 = PATTERN.PSEUDO.exec(_selector);
+				if (m2) frag = _frag || frag, PARSER.PSEUDO(frag, m2, ei);
+				break;
+			// Attr
+			case '[':
+				m2 = PATTERN.ATTR.exec(_selector);
+				if (m2) frag = _frag || frag, PARSER.ATTR(frag, m2, ei);
+				break;
+			// Group
+			case ',':
+				m2 = PATTERN.GROUP.exec(_selector);
+				if (m2) newGroup = true, g++, _frag = frag = null;
+				break;
+			// Tag
+			default:
+				m2 = PATTERN.TAG.exec(_selector);
+				if (m2) {
+					frag.tag = m2[1];
+					if (_frag) _frag.next = frag, frag.prev = _frag;
+				}
+				break;
+		}
+		// Throw Syntax Error
+		if (!m2) throw syntaxErr(ei);
+		i += m2[0].length, ei += m2[0].length;
+		if (newGroup && (_frag || frag)) result.push(_frag || frag), newGroup = false;
+		_frag = frag;
+	}
+	return result;
+},
+// the parsers for selector fragment.
+PARSER = {
+	/**
+	 * parse Class selector
+	 * @param {Frag} frag an instance of Frag
+	 * @param {Array} match matched result
+	 * @param {Number} i the fragment start index in the selector
+	 * @private
+	 */
+	CLASS: function(frag, match, i){
 		frag.feature['.'] = frag.feature['.'] || [];
 		frag.feature['.'].push(match[2]);
 	},
-	':': function(frag, match, i){
+	/**
+	 * parse Pseudo-Class selector
+	 * @param {Frag} frag an instance of Frag
+	 * @param {Array} match matched result
+	 * @param {Number} i the fragment start index in the selector
+	 * @private
+	 */
+	PSEUDO: function(frag, match, i){
 		try {
 			frag.feature[':'] = frag.feature[':'] || [];
-			var name = match[1].toLowerCase(), value = match[5] || match[4] || match[3], parser = SUB_PARSER[':'][name];
-			if (value && parser) value = parser(value);
+			var name = match[1].toLowerCase(), value = match[5] || match[4] || match[3], parser = SUB_PARSER.PSEUDO[name];
+			if (value && parser) value = parser(value, name.length + i + 2);
 			frag.feature[':'].push({
 				name: name,
 				value: value
 			});
 		} catch (e) {
-			if (e != $break) throw syntaxErr(i);
+			if (e != $break) throw syntaxErr(i, e);
 		}
 	},
-	'[]': function(frag, match, i){
+	/**
+	 * parse Attribute selector
+	 * @param {Frag} frag an instance of Frag
+	 * @param {Array} match matched result
+	 * @param {Number} i the fragment start index in the selector
+	 * @private
+	 */
+	ATTR: function(frag, match, i){
 		try {
 			frag.feature['[]'] = frag.feature['[]'] || [];
-			var name = match[1], expr = match[2] || '', value = match[5] || match[4] || match[3], parser = SUB_PARSER['[]'][name];
-			if (value && parser) value = parser(expr, value);
+			var name = match[1], expr = match[2] || '',
+			value = match[5] || match[4] || match[3],
+			parser = SUB_PARSER.ATTR[name];
+			if (value && parser) value = parser(expr, value, i);
 			frag.feature['[]'].push({
 				name: name,
 				expr: expr,
@@ -65,45 +179,31 @@ model = {
 				target: null
 			});
 		} catch (e) {
-			if (e != $break) throw syntaxErr(i);
+			if (e != $break) throw syntaxErr(i, e);
 		}
 	}
 },
+// the parsers for special sub selector.
 SUB_PARSER = {
-	':': {
-		'not': function(str){
-			var result = {feature:{}}, i = 0, l = str.length, _str, m1, m2;
-			while (i < l) {
-				_str = str.slice(i, l), m1 = PATTERN.CHAR.exec(_str);
-				if (!m1) break;
-				switch (m1[1]) {
-					// Class
-					case '.':
-						m2 = PATTERN.CLASS.exec(_str);
-						if (m2) model['.'](result, m2);
-						break;
-					// PSEUDO
-					case ':':
-						m2 = PATTERN.PSEUDO.exec(_str);
-						if (m2) model[':'](result, m2);
-						break;
-					// Attr
-					case '[':
-						m2 = PATTERN.ATTR.exec(_str);
-						if (m2) model['[]'](result, m2);
-						break;
-				}
-				i += (m2 ? m2[0] : _str).length;
-			}
-			return result;
+	PSEUDO: {
+		/**
+		 * parse the :not sub selectors
+		 * @param {String} selector
+		 */
+		not: function(selector, i){
+			return parseSelector(selector, i);
 		},
-		'nth-child': function(str){
-			if (/^\bn\b$/i.test(str)) throw $break;
+		/**
+		 * parse the :nth-child value
+		 * @param {String} selector
+		 */
+		'nth-child': function(selector){
+			if (/^\bn\b$/i.test(selector)) throw $break;
 			// parse equations like 'even', 'odd', '5', '2n', '3n+2', '4n-1', '-n+6'
-			var m = PATTERN.NTH.exec(str == 'even' && '2n' ||
-			str == 'odd' && '2n+1' ||
-			!/\D/.test(str) && '0n+' + str ||
-			str);
+			var m = PATTERN.NTH.exec(selector == 'even' && '2n' ||
+			selector == 'odd' && '2n+1' ||
+			!/\D/.test(selector) && '0n+' + selector ||
+			selector);
 			
 			// calculate the numbers (a)n+(b) including if they are negative
 			return {
@@ -112,7 +212,12 @@ SUB_PARSER = {
 			};
 		}
 	},
-	'[]':{
+	ATTR:{
+		/**
+		 * parse the [class] value
+		 * @param {String} expr
+		 * @param {String} value
+		 */
 		'class': function(expr, value){
 			if (!value) return value;
 			switch (expr) {
@@ -129,86 +234,23 @@ SUB_PARSER = {
 		}
 	}
 },
-parseCSS = function(str){
-	var result = [], g = 0, i = 0, l = str.length, newGroup = true, _str, m1, m2, frag, _frag;
-	while (i < l) {
-		_str = str.slice(i, l), m1 = PATTERN.CHAR.exec(_str);
-		
-		// Throw Syntax Error
-		if (!m1) throw syntaxErr(i);
-		
-		frag = new Frag(), frag._fragroup = g;
-		switch (m1[1]) {
-			// Filter
-			case '>': case '~': case '+':
-				m2 = PATTERN.FILTER.exec(_str);
-				if (m2) {
-					frag.type = m2[1], frag.tag = m2[2];
-					if (_frag) _frag.next = frag, frag.prev = _frag;
-				}
-				break;
-			// ID
-			case '#':
-				m2 = PATTERN.ID.exec(_str);
-				if (m2) {
-					if (!m2[1]) frag = _frag || frag;
-					frag.type = '#', frag.id = m2[2];
-					if (m2[1] && _frag) _frag.next = frag, frag.prev = _frag;
-				}
-				break;
-			// Class
-			case '.':
-				m2 = PATTERN.CLASS.exec(_str);
-				if (m2) {
-					if (m2[1] && _frag) _frag.next = frag, frag.prev = _frag;
-					else frag = _frag || frag;
-					model['.'](frag, m2, i);
-				}
-				break;
-			// PSEUDO
-			case ':':
-				m2 = PATTERN.PSEUDO.exec(_str);
-				if (m2) frag = _frag || frag, model[':'](frag, m2, i);
-				break;
-			// Attr
-			case '[':
-				m2 = PATTERN.ATTR.exec(_str);
-				if (m2) frag = _frag || frag, model['[]'](frag, m2, i);
-				break;
-			// Group split
-			case ',':
-				m2 = PATTERN.SPLIT.exec(_str);
-				if (m2) newGroup = true, g++, _frag = frag = null;
-				break;
-			// Tag
-			default:
-				m2 = PATTERN.TAG.exec(_str);
-				if (m2) {
-					frag.tag = m2[1];
-					if (_frag) _frag.next = frag, frag.prev = _frag;
-				}
-				break;
-		}
-		// Throw Syntax Error
-		if (!m2) throw syntaxErr(i);
-		i += m2[0].length;
-		if (newGroup && (_frag || frag)) result.push(_frag || frag), newGroup = false;
-		_frag = frag;
-	}
-	return result;
-};
-
-// fix document.nodeType in IE5.5
-if (!document.nodeType) document.nodeType = 9;
-
-// CSS Selectors Query Engine
-var LiX = window.LiX = function(selector, context){
+/** 
+ * The primary method of calling LiX - pass in a selector and an optional context (if no context is provided the root 'document' is used).
+ * Runs the specified selector and returns an array of matched DOMElements.
+ * @param {String} selector CSS selectors
+ * @param {DOMElement} context context
+ * @param {Object} result custom result set object
+ * @return an array of matched DOMElements
+ * @type {Array}
+ * @throws syntax error
+ */
+LiX = window.LiX = function(selector, context, result){
 	context = [context || document];
-	var result = [];
+	result ? result.length == null && (result.length = 0) : result = [];
 	if (typeof(selector) == 'string' && isElem(context[0])) {
 		try {
 			lixCache = 0, lixIndex++;
-			var stack = parseCSS(selector), i = 0, frag;
+			var stack = parseSelector(selector), i = 0, frag;
 			while (frag = stack[i++]) 
 				query(result, frag, context);
 		} catch (e) {
@@ -239,20 +281,39 @@ query = function(result, frag, context){
 			if (e != $break) throw e;
 		}
 	}
+	return result;
 },
 push = function(result, node){
 	// for no duplicate
-	if (lixIndex != node._lixIndex) node._lixIndex = lixIndex, result.push(node);
+	if (lixIndex != node._lixIndex) {
+		node._lixIndex = lixIndex;
+		Array.prototype.push.call(result, node);
+	}
 },
+/**
+ * checks node tag.
+ * @param {Frag} frag an instance of Frag
+ * @param {DOMElement} detected element
+ * @type {Boolean}
+ * @private
+ */
 tagChk = function(frag, node){
 	return frag.tag == '*' ? true : node.nodeName.toLowerCase() == frag.tag.toLowerCase();
 },
+/**
+ * checks node features.
+ * @param {Frag} frag an instance of Frag
+ * @param {DOMElement} detected element
+ * @param {Object} index node index
+ * @type {Boolean}
+ * @private
+ */
 detect = function(frag, node, index){
 	var expr, result = true;
 	// class, pseudo, attr check
 	for (expr in frag.feature) {
 		if (!result) break;
-		result = DETECTOR[expr](node, frag.feature[expr], index);
+		result = DETECT[expr](node, frag.feature[expr], index);
 	}
 	return result;
 },
@@ -261,26 +322,51 @@ AttrMap = {
 	'for': 'htmlFor',
 	'id': 'id'
 },
-isXML = function(elem){
-	return elem.nodeType == 9 && elem.documentElement.nodeName != "HTML" ||
-		!!elem.ownerDocument && elem.ownerDocument.documentElement.nodeName != "HTML";
+
+/**
+ * checks object is xml dom element or xml dom document.
+ * @param {Object} node detected object
+ * @type {Boolean}
+ * @private
+ */
+isXML = function(node){
+	return node.nodeType == 9 && node.documentElement.nodeName != "HTML" ||
+		!!node.ownerDocument && node.ownerDocument.documentElement.nodeName != "HTML";
 },
-isElem = function(obj){
-	return (obj && (obj.nodeType == 1 || obj.nodeType == 9));
+/**
+ * checks object is dom element or dom document.
+ * @param {Object} node detected object
+ * @type {Boolean}
+ * @private
+ */
+isElem = function(node){
+	return (node && (node.nodeType == 1 || node.nodeType == 9));
 },
+/** checks node A is contains node B.
+ * @param {DOMElement} nodeA detected node A
+ * @param {DOMElement} nodeB detected node B
+ * @type {Boolean}
+ * @private
+ */
 contains = (function(){
-	if (document.documentElement.compareDocumentPosition) return function(ancestor, descendant){
-		return (ancestor.compareDocumentPosition(descendant) & 16) == 16;
+	if (document.documentElement.compareDocumentPosition) return function(nodeA, nodeB){
+		return (nodeA.compareDocumentPosition(nodeB) & 16) == 16;
 	}
-	if (document.documentElement.contains) return function(ancestor, descendant){
-		return ancestor.contains(descendant) && ancestor != descendant;
+	if (document.documentElement.contains) return function(nodeA, nodeB){
+		return nodeA.contains(nodeB) && nodeA != nodeB;
 	};
-	return function(ancestor, descendant){
-		while (descendant = descendant.parentNode) 
-			if (descendant == ancestor) return true;
+	return function(nodeA, nodeB){
+		while (nodeB = nodeB.parentNode) 
+			if (nodeB == nodeA) return true;
 		return false;
 	}
 })(),
+/**
+ * gets node index(begins at 1).
+ * @param {DOMElement} detected node
+ * @type {Number}
+ * @private
+ */
 getNodeIndex = function(node){
 	var i = 0, pn = node.parentNode, cn = pn.firstChild;
 	if (lixCache != pn._lixCache) {
@@ -290,6 +376,13 @@ getNodeIndex = function(node){
 	}
 	return node.nodeIndex;
 },
+/**
+ * filters out the first context node from the parent nodes of the context nodes.
+ * @param {Object} frag
+ * @param {Object} context
+ * @return an array of filter results
+ * @type {Array}
+ */
 contextFilter = function(frag, context){
 	var node, prevNode, i = 0, result = [];
 	switch (frag.type) {
@@ -364,11 +457,11 @@ FILTER = {
 	}
 },
 // Feature detect
-DETECTOR = {
+DETECT = {
 	':': function(node, data, index){
 		var result = true, i = 0, frag;
 		while (result && (frag = data[i++])) {
-			var probe = PROBE.PSEUDO[frag.name.toLowerCase()];
+			var probe = PROBE.PSEUDO[frag.name];
 			result = probe ? probe(node, frag.value, index) : false;
 		}
 		return result;
@@ -389,9 +482,9 @@ DETECTOR = {
 		return result;
 	}
 },
-// Node probe : call by DETECTOR
+// Node probes : call by DETECT
 PROBE = {
-// Attribute probe
+// Attribute probes
 ATTR: {
 	'': function(target, value){
 		return !!target;
@@ -418,14 +511,14 @@ ATTR: {
 		return target ? target == value || target.substr(0, value.length + 1) == value + '-' : false;
 	}
 },
-// PSEUDO probe
+// PSEUDO probes
 PSEUDO: {
 	// form element
+	input: function(node){return /input|select|textarea|button/i.test(node.nodeName);},
 	button: function(node){return 'button' == node.type || node.nodeName.toUpperCase() == 'BUTTON';},
 	checkbox: function(node){return 'checkbox' == node.type;},
 	file: function(node){return 'file' == node.type;},
 	image: function(node){return 'image' == node.type;},
-	input: function(node){return /input|select|textarea|button/i.test(node.nodeName);},
 	password: function(node){return 'password' == node.type;},
 	radio: function(node){return 'radio' == node.type;},
 	reset: function(node){return 'reset' == node.type;},
@@ -443,7 +536,13 @@ PSEUDO: {
 	empty: function(node){return !node.firstChild;},
 	parent: function(node){return !!node.firstChild;},
 	contains: function(node, value){return (node.textContent || node.innerText || '').indexOf(value) >= 0;},
-	has: function(node, value){return !!(new LiX(value, node)).length;},
+	has: function(node, stack, index){
+		var i = 0, frag, result = true;
+		while (result && (frag = stack[i++])) 
+			result = !!(query([], frag, [node]).length);
+		return result;
+	},
+//	has: function(node, value){return !!(new LiX(value, node)).length;},
 	// child
 	'first-child': function(node){
 		while ((node = node.previousSibling) && node.nodeType != 1);
@@ -472,10 +571,17 @@ PSEUDO: {
 	'lth-child': function(node, value, index){return value > (index || getNodeIndex(node));},
 	// other
 	header: function(node){return /h\d/i.test(node.nodeName);},
-	not: function(node, value, index){return !detect(value, node, index);}
+	not: function(node, stack, index){
+		var i = 0, frag, result = true;
+		while (result && (frag = stack[i++])) 
+			result = !(tagChk(frag, node) && detect(frag, node, index));
+		return result;
+	}
 }
 };
 
+SUB_PARSER.PSEUDO.has = SUB_PARSER.PSEUDO.not;
+
 // add functions to LiX
-LiX.parseCSS = parseCSS;
+LiX.parseSelector = parseSelector;
 })();
