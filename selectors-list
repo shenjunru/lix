@@ -1,0 +1,54 @@
+No Supported Selectors in <CSS 3 Selectors>
+	- :nth-last-child(n), :nth-last-of-type(n)
+	- :nth-of-type(n), :first-of-type, :last-of-type, :only-of-type
+	- :active, :link, :visited
+	- :focus, :hover
+	- :root, :target
+	- :lang(fr)
+	- ::after, ::before
+	- ::first-letter, ::first-line
+
+
+Supported Selectors in <CSS 3 Selectors>
+	- *
+	- #id
+	- element
+	- ancestor descendant
+	- parent > child
+	- prev + next
+	- prev ~ siblings
+	- .class
+	- :nth-child(n), :first-child, :last-child, :only-child
+	- :enabled, :disabled
+	- :not(s)
+	- :checked
+	- :empty
+	- [foo], [foo="bar"], [foo~="bar"], [foo^="bar"], [foo$="bar"], [foo*="bar"], [hfoo|="en"]
+
+
+Changes of Selectors in <CSS 3 Selectors>
+	- :not(a.b)
+		LiX supports non-simple selectors in :not() (most browsers only support :not(a), for example).
+	- :not(div > p)
+		LiX supports full selectors in :not().
+	- :not(div, p)
+		LiX supports multiple selectors in :not().
+
+
+Additions Selectors
+	- :contains(TEXT)
+		Finds all elements whose textual context contains the word 'TEXT' (case sensitive).
+	- :has(s)
+		Finds all elements whose contains elements that matched selector s.
+	- :header
+		Finds all elements that are a header element (h1, h2, h3, h4, h5, h6).
+	- :parent
+		Finds all elements that contains another element.
+	- :selected
+		Finds all elements that are selected.
+
+* Form selectors
+	- :input
+		Finds all input elements (includes textareas, selects, and buttons).
+	- :button:, :checkbox, :file, :image, :password, :reset, :submit, :text
+		Finds the input element with the specified input type (:button also finds button elements).
