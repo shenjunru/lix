@@ -34,8 +34,8 @@ PATTERN = {
 	ID: /^(\s*)#(\*|[\w\u00c0-\uFFFF-]+)/,
 	FILTER: /^\s*([>~+])\s*(\*|[\w\u00c0-\uFFFF-]+)/,
 	CLASS: /^(\s*)\.([\w\d\u00C0-\uFFFF-]+)/,
-	PSEUDO: /^\s*:(\w[\w-]*)(?:\((?:(['"])(.+)\2|([^\)]+\(.+\))|([^\)]+))\))?/,
-	ATTR: /^\s*\[\s*([\w\d]+)\s*(?:([!~$|*^]?=)\s*([\w\d\u00C0-\uFFFF.-]+|"([^"]*)"|'([^']*)')\s*)?\]/,
+	PSEUDO: /^\s*:([\w\u00c0-\uFFFF-]+)(?:\((?:(['"])(.+)\2|([^\)]+\(.+\))|([^\)]+))\))?/,
+	ATTR: /^\s*\[\s*([\w\u00c0-\uFFFF-]+)\s*(?:(\S?=)\s*(['"]*)(.*?)\3)?\s*\]/,
 	NTH: /(-?)(\d*)n((?:\+|-)?\d*)/
 },
 $break = {},
@@ -169,7 +169,7 @@ PARSER = {
 		try {
 			frag.feature['[]'] = frag.feature['[]'] || [];
 			var name = match[1], expr = match[2] || '',
-			value = match[5] || match[4] || match[3],
+			value = match[4],
 			parser = SUB_PARSER.ATTR[name];
 			if (value && parser) value = parser(expr, value, i);
 			frag.feature['[]'].push({
