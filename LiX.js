@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.5 build 20090723
+ * Version: 1.0.5.1 build 20090726
  * 
  * Copyright (c) 2009 Shen Junru (XFSN)
  * Released under the MIT, BSD, and GPL Licenses.
@@ -12,20 +12,6 @@
 if (!document.nodeType) document.nodeType = 9;
 
 var
-/**
- * @class Selector Fragment
- * @constructor
- * @private
- */
-Frag = function(){
-	this.prev = null;
-	this.next = null;
-	this.group = 0;
-	this.tag = '*';
-	this.id = '';
-	this.type = '';
-	this.feature = {};
-},
 // the patterns for selector fragment.
 PATTERN = {
 	CHAR: /^\s*([>~+#*.:[,\w\u00c0-\uFFFF])/,
@@ -41,7 +27,7 @@ PATTERN = {
 $break = {},
 /**
  * Creates syntax error message with start index of error fragment in the selector.
- * @param {Number} i start index of error fragment
+ * @param {Number} i start index of error selector fragment
  * @param {Object} e
  * @returns syntax error object
  * @type {SyntaxError}
@@ -51,25 +37,32 @@ syntaxErr = function(i, e){
 	return e && e instanceof SyntaxError ? e : new SyntaxError('css parse error, char:' + i);
 },
 /**
- * The method of parse CSS selectors string to JavaScript object.
- * @param {String} selector
+ * parses CSS selectors string to Array object.
+ * @param {String} selector CSS selectors string
+ * @param {Number} index 
  * @return an array of selector fragments
- * @type {Array} 
+ * @type {Array}
  */
-parseSelector = function(selector, ei){
-	ei = ei || 0;
-	var result = [], g = 0, i = 0, l = selector.length, newGroup = true, _selector, m1, m2, frag, _frag;
+parseSelector = function(selector, index){
+	index = index || 0;
+	var result = [], newGroup = true,
+	str = selector.replace(/\s*$/, ''),
+	i = 0, g = 0, l = str.length,
+	m1, m2, frag, _frag;
 	while (i < l) {
-		_selector = selector.slice(i, l), m1 = PATTERN.CHAR.exec(_selector);
+		str = selector.slice(i, l), m1 = PATTERN.CHAR.exec(str);
+		if (!m1) throw syntaxErr(index);
 		
-		// throw syntax error
-		if (!m1) throw syntaxErr(ei);
-		
-		frag = new Frag(), frag._fragroup = g;
+		frag = {
+			tag: '*',
+			type: '',
+			feature: {},
+			group: g
+		};
 		switch (m1[1]) {
 			// Filter
 			case '>': case '~': case '+':
-				m2 = PATTERN.FILTER.exec(_selector);
+				m2 = PATTERN.FILTER.exec(str);
 				if (m2) {
 					frag.type = m2[1], frag.tag = m2[2];
 					if (_frag) _frag.next = frag, frag.prev = _frag;
@@ -77,7 +70,7 @@ parseSelector = function(selector, ei){
 				break;
 			// ID
 			case '#':
-				m2 = PATTERN.ID.exec(_selector);
+				m2 = PATTERN.ID.exec(str);
 				if (m2) {
 					if (!m2[1]) frag = _frag || frag;
 					frag.type = '#', frag.id = m2[2];
@@ -86,41 +79,42 @@ parseSelector = function(selector, ei){
 				break;
 			// Class
 			case '.':
-				m2 = PATTERN.CLASS.exec(_selector);
+				m2 = PATTERN.CLASS.exec(str);
 				if (m2) {
 					if (m2[1] && _frag) _frag.next = frag, frag.prev = _frag;
 					else frag = _frag || frag;
-					PARSER.CLASS(frag, m2, ei);
+					PARSER.CLASS(frag, m2, index);
 				}
 				break;
 			// PSEUDO
 			case ':':
-				m2 = PATTERN.PSEUDO.exec(_selector);
-				if (m2) frag = _frag || frag, PARSER.PSEUDO(frag, m2, ei);
+				m2 = PATTERN.PSEUDO.exec(str);
+				if (m2) frag = _frag || frag, PARSER.PSEUDO(frag, m2, index);
 				break;
 			// Attr
 			case '[':
-				m2 = PATTERN.ATTR.exec(_selector);
-				if (m2) frag = _frag || frag, PARSER.ATTR(frag, m2, ei);
+				m2 = PATTERN.ATTR.exec(str);
+				if (m2) frag = _frag || frag, PARSER.ATTR(frag, m2, index);
 				break;
 			// Group
 			case ',':
-				m2 = PATTERN.GROUP.exec(_selector);
+				m2 = PATTERN.GROUP.exec(str);
 				if (m2) newGroup = true, g++, _frag = frag = null;
 				break;
 			// Tag
 			default:
-				m2 = PATTERN.TAG.exec(_selector);
+				m2 = PATTERN.TAG.exec(str);
 				if (m2) {
 					frag.tag = m2[1];
 					if (_frag) _frag.next = frag, frag.prev = _frag;
 				}
 				break;
 		}
-		// Throw Syntax Error
-		if (!m2) throw syntaxErr(ei);
-		i += m2[0].length, ei += m2[0].length;
+		if (!m2) throw syntaxErr(index);
+		
+		i += m2[0].length, index += m2[0].length;
 		if (newGroup && (_frag || frag)) result.push(_frag || frag), newGroup = false;
+		
 		_frag = frag;
 	}
 	return result;
@@ -129,7 +123,7 @@ parseSelector = function(selector, ei){
 PARSER = {
 	/**
 	 * parse Class selector
-	 * @param {Frag} frag an instance of Frag
+	 * @param {Object} frag a selector fragment
 	 * @param {Array} match matched result
 	 * @param {Number} i the fragment start index in the selector
 	 * @private
@@ -140,7 +134,7 @@ PARSER = {
 	},
 	/**
 	 * parse Pseudo-Class selector
-	 * @param {Frag} frag an instance of Frag
+	 * @param {Object} frag a selector fragment
 	 * @param {Array} match matched result
 	 * @param {Number} i the fragment start index in the selector
 	 * @private
@@ -160,7 +154,7 @@ PARSER = {
 	},
 	/**
 	 * parse Attribute selector
-	 * @param {Frag} frag an instance of Frag
+	 * @param {Object} frag a selector fragment
 	 * @param {Array} match matched result
 	 * @param {Number} i the fragment start index in the selector
 	 * @private
@@ -188,14 +182,16 @@ SUB_PARSER = {
 	PSEUDO: {
 		/**
 		 * parse the :not sub selectors
-		 * @param {String} selector
+		 * @param {String} selector sub selector
+		 * @private
 		 */
 		not: function(selector, i){
 			return parseSelector(selector, i);
 		},
 		/**
 		 * parse the :nth-child value
-		 * @param {String} selector
+		 * @param {String} selector sub selector
+		 * @private
 		 */
 		'nth-child': function(selector){
 			if (/^\bn\b$/i.test(selector)) throw $break;
@@ -215,8 +211,9 @@ SUB_PARSER = {
 	ATTR:{
 		/**
 		 * parse the [class] value
-		 * @param {String} expr
-		 * @param {String} value
+		 * @param {String} expr comparison symbols
+		 * @param {String} value comparison value
+		 * @private
 		 */
 		'class': function(expr, value){
 			if (!value) return value;
@@ -239,7 +236,7 @@ SUB_PARSER = {
  * Runs the specified selector and returns an array of matched DOMElements.
  * @param {String} selector CSS selectors
  * @param {DOMElement} context context
- * @param {Object} result custom result set object
+ * @param {Object} result custom result sets object
  * @return an array of matched DOMElements
  * @type {Array}
  * @throws syntax error
@@ -252,7 +249,7 @@ LiX = window.LiX = function(selector, context, result){
 			lixCache = 0, lixIndex++;
 			var stack = parseSelector(selector), i = 0, frag;
 			while (frag = stack[i++]) 
-				query(result, frag, context);
+				query(context, frag, result);
 		} catch (e) {
 			throw e;
 		}
@@ -261,28 +258,43 @@ LiX = window.LiX = function(selector, context, result){
 },
 lixCache = 0, // for compute node index
 lixIndex = 0, // for no duplicate
-query = function(result, frag, context){
-	var next = frag.next;
+/**
+ * gets matched elements from contexts by selector.
+ * @param {Array} contexts an array of DOM elements
+ * @param {Object} selector a selector fragment
+ * @param {Array,Object} result result custom result sets object
+ * @return an array of all matched elements
+ * @type {Array,Object}
+ * @private
+ */
+query = function(contexts, selector, result){
+	var next = selector.next;
 	if (next) {
-		var current = [], i = 0;
-		frag.next = null;
-		arguments.callee(current, frag, context);
-		current.lenght == 0 || arguments.callee(result, next, current);
-		// restore the selector frag link
-		frag.next = next;
+		selector.next = null;
+		var curResult = arguments.callee(contexts, selector, []);
+		curResult.lenght || arguments.callee(curResult, next, result);
+		// restore the selector fragment link
+		selector.next = next;
 	} else {
-		if(!context.length) context = document;
-		var i = 0, temp, _context = contextFilter(frag, context);
 		lixCache++;
+		var contexts = contextsFilter(contexts, selector), 
+		allTag = selector.tag == '*' || selector.type == '',
+		i = 0, context;
 		try {
-			while (temp = _context[i++]) 
-				if (temp.nodeType) FILTER[frag.type](result, frag, temp);
+			while (context = contexts[i++]) 
+				if (context.nodeType) FILTER[selector.type](context, selector, result || [], allTag);
 		} catch (e) {
 			if (e != $break) throw e;
 		}
 	}
 	return result;
 },
+/**
+ * inserts element to result sets, no duplicate.
+ * @param {Object} result result sets
+ * @param {DOMElement} node element to be insert
+ * @private
+ */
 push = function(result, node){
 	// for no duplicate
 	if (lixIndex != node._lixIndex) {
@@ -292,46 +304,31 @@ push = function(result, node){
 },
 /**
  * checks node tag.
- * @param {Frag} frag an instance of Frag
  * @param {DOMElement} detected element
+ * @param {Object} selector a selector fragment
  * @type {Boolean}
  * @private
  */
-tagChk = function(frag, node){
-	return frag.tag == '*' ? true : node.nodeName.toLowerCase() == frag.tag.toLowerCase();
+isTag = function(node, selector){
+	return node.nodeName.toLowerCase() == selector.tag.toLowerCase();
 },
 /**
  * checks node features.
- * @param {Frag} frag an instance of Frag
  * @param {DOMElement} detected element
- * @param {Object} index node index
+ * @param {Object} selector a selector fragment
+ * @param {Boolean} allTag
+ * @param {Number} index node index
  * @type {Boolean}
  * @private
  */
-detect = function(frag, node, index){
-	var expr, result = true;
-	// class, pseudo, attr check
-	for (expr in frag.feature) {
+detect = function(node, selector, allTag, index){
+	var result = allTag || isTag(node, selector), expr;
+	// checks class, pseudo, attribute
+	for (expr in selector.feature) {
 		if (!result) break;
-		result = DETECT[expr](node, frag.feature[expr], index);
+		result = DETECT[expr](node, selector.feature[expr], index);
 	}
 	return result;
-},
-AttrMap = {
-	'class': 'className',
-	'for': 'htmlFor',
-	'id': 'id'
-},
-
-/**
- * checks object is xml dom element or xml dom document.
- * @param {Object} node detected object
- * @type {Boolean}
- * @private
- */
-isXML = function(node){
-	return node.nodeType == 9 && node.documentElement.nodeName != "HTML" ||
-		!!node.ownerDocument && node.ownerDocument.documentElement.nodeName != "HTML";
 },
 /**
  * checks object is dom element or dom document.
@@ -342,7 +339,17 @@ isXML = function(node){
 isElem = function(node){
 	return (node && (node.nodeType == 1 || node.nodeType == 9));
 },
-/** checks node A is contains node B.
+/**
+ * checks object is xml dom element or xml dom document.
+ * @param {Object} node detected object
+ * @type {Boolean}
+ * @private
+ */
+isXML = function(node){
+	return node.nodeType == 9 && node.documentElement.nodeName != "HTML" ||
+		!!node.ownerDocument && node.ownerDocument.documentElement.nodeName != "HTML";
+},
+/** checks node A contains node B.
  * @param {DOMElement} nodeA detected node A
  * @param {DOMElement} nodeB detected node B
  * @type {Boolean}
@@ -362,6 +369,58 @@ contains = (function(){
 	}
 })(),
 /**
+ * filters out the first context node from the parent nodes of the context nodes.
+ * @param {Array} contexts
+ * @param {Object} selector
+ * @return an array of filtered contexts
+ * @type {Array}
+ */
+contextsFilter = function(contexts, selector){
+	var node, prevNode, i = 0, result = [];
+	switch (selector.type) {
+		case '~':{
+			while (node = contexts[i++]) 
+				if (node.nodeType) {result.push(node);break;}
+			while (prevNode = node, node = contexts[i++])
+				if (contains(prevNode, node)) result.push(node);
+			return result;
+		}
+		case '':{
+			while (node = contexts[i++]) 
+				if (node.nodeType) {result.push(node);break;}
+			while (prevNode = node, node = contexts[i++])
+				if (contains(node, prevNode)) result = [node];
+				else if (!contains(prevNode, node)) result.push(node);
+			return result;
+		}
+		default:{
+			return contexts;
+		}
+	}
+},
+AttrMap = {
+	'class': 'className',
+	'for': 'htmlFor',
+	'id': 'id'
+},
+/**
+ * gets element's attribute value.
+ * @param {DOMElement} node
+ * @param {String} name
+ * @return element's attribute value
+ * @type {Object}
+ * @private
+ */
+getAttr = function(node, name){
+	var value = name in AttrMap ? node[AttrMap[name]] : node.getAttribute(name);
+	switch (name) {
+		case 'class':
+			value && (value = ' ' + value + ' ');
+			break;
+	}
+	return value;
+},
+/**
  * gets node index(begins at 1).
  * @param {DOMElement} detected node
  * @type {Number}
@@ -376,109 +435,60 @@ getNodeIndex = function(node){
 	}
 	return node.nodeIndex;
 },
-/**
- * filters out the first context node from the parent nodes of the context nodes.
- * @param {Object} frag
- * @param {Object} context
- * @return an array of filter results
- * @type {Array}
- */
-contextFilter = function(frag, context){
-	var node, prevNode, i = 0, result = [];
-	switch (frag.type) {
-		case '~':{
-			while (node = context[i++]) 
-				if (node.nodeType) {result.push(node);break;}
-			while (prevNode = node, node = context[i++])
-				if (contains(prevNode, node)) result.push(node);
-			return result;
-		}
-		case '':{
-			while (node = context[i++]) 
-				if (node.nodeType) {result.push(node);break;}
-			while (prevNode = node, node = context[i++])
-				if (contains(node, prevNode)) result = [node];
-				else if (!contains(prevNode, node)) result.push(node);
-			return result;
-		}
-		default:{
-			return context;
-		}
-	}
-},
-getAttr = function(node, name){
-	if (name in AttrMap) return node[AttrMap[name]];
-	return node.getAttribute(name);
-},
-setAttrTarget = function(attr, node){
-	var target = getAttr(node, attr.name);
-	switch (attr.name) {
-		case 'class':{
-			attr.target = target ? ' ' + target + ' ' : null;
-			break;
-		}
-		default:{
-			attr.target = target;
-		}
-	}
-	return attr;
-},
 // Relation Filter
 FILTER = {
-	'': function(result, frag, context){
-		var i = 0, node, nodes = context.getElementsByTagName(frag.tag) || [];
+	'': function(context, selector, result, allTag){
+		var i = 0, node, nodes = context.getElementsByTagName(selector.tag);
 		while (node = nodes[i++]) 
-			if (detect(frag, node, null)) push(result, node);
+			detect(node, selector, allTag) && push(result, node);
 	},
-	'#': function(result, frag, context){
-		var node = (context.ownerDocument || document).getElementById(frag.id);
-		if (node && node.getAttributeNode('id') && tagChk(frag, node) && detect(frag, node, null)) {
-			if (frag.prev == null || contains(context, node)) push(result, node);
+	'#': function(context, selector, result, allTag){
+		var node = (context.ownerDocument || document).getElementById(selector.id);
+		if (node && node.getAttributeNode('id') && detect(node, selector, allTag)) {
+			(selector.prev == null || contains(context, node)) && push(result, node);
 			throw $break;
 		}
 	},
-	'>': function(result, frag, context){
+	'>': function(context, selector, result, allTag){
 		var i = 0, j = 1, node, children = context.childNodes || [];
 		while (node = children[i++]) 
-			if (node.nodeType == 1 && tagChk(frag, node) && detect(frag, node, j++)) push(result, node);
+			(node.nodeType == 1 && detect(node, selector, allTag, j++)) && push(result, node);
 	},
-	'+': function(result, frag, context){
+	'+': function(context, selector, result, allTag){
 		var node = context;
 		while (node = node.nextSibling) 
 			if (node.nodeType == 1) {
-				if (tagChk(frag, node) && detect(frag, node, null)) push(result, node);
+				detect(node, selector, allTag) && push(result, node);
 				break;
 			}
 	},
-	'~': function(result, frag, context){
+	'~': function(context, selector, result, allTag){
 		var node = context;
 		while (node = node.nextSibling) 
-			if (node.nodeType == 1 && tagChk(frag, node) && detect(frag, node, null)) push(result, node);
+			(node.nodeType == 1 && detect(node, selector, allTag)) && push(result, node);
 	}
 },
 // Feature detect
 DETECT = {
-	':': function(node, data, index){
-		var result = true, i = 0, frag;
-		while (result && (frag = data[i++])) {
-			var probe = PROBE.PSEUDO[frag.name];
-			result = probe ? probe(node, frag.value, index) : false;
+	':': function(node, features, index){
+		var result = true, i = 0, data, probe;
+		while (result && (data = features[i++])) {
+			probe = PROBE.PSEUDO[data.name];
+			result = probe ? probe(node, data.value) : false;
 		}
 		return result;
 	},
-	'.': function(node, data, index){
+	'.': function(node, features){
 		if(!node.className) return false;
-		var result = true, i = 0, frag, classes = ' ' + node.className + ' ';
-		while (result && (frag = data[i++]))
-			result = classes.indexOf(frag) > -1;
+		var classes = ' ' + node.className + ' ', result = true, i = 0, data;
+		while (result && (data = features[i++]))
+			result = classes.indexOf(data) > -1;
 		return result;
 	},
-	'[]': function(node, data, index){
-		var result = true, i = 0, attr;
-		while (result && (attr = data[i++])) {
-			attr = setAttrTarget(attr, node);
-			result = PROBE.ATTR[attr.expr](attr.target, attr.value);
-		}
+	'[]': function(node, features){
+		var result = true, i = 0, data;
+		while (result && (data = features[i++])) 
+			result = PROBE.ATTR[data.expr](getAttr(node, data.name), data.value);
 		return result;
 	}
 },
@@ -536,13 +546,12 @@ PSEUDO: {
 	empty: function(node){return !node.firstChild;},
 	parent: function(node){return !!node.firstChild;},
 	contains: function(node, value){return (node.textContent || node.innerText || '').indexOf(value) >= 0;},
-	has: function(node, stack, index){
-		var i = 0, frag, result = true;
-		while (result && (frag = stack[i++])) 
-			result = !!(query([], frag, [node]).length);
+	has: function(node, value){
+		var result = true, i = 0, selector;
+		while (result && (selector = value[i++])) 
+			result = !!(query([node], selector, []).length);
 		return result;
 	},
-//	has: function(node, value){return !!(new LiX(value, node)).length;},
 	// child
 	'first-child': function(node){
 		while ((node = node.previousSibling) && node.nodeType != 1);
@@ -571,10 +580,10 @@ PSEUDO: {
 	'lth-child': function(node, value, index){return value > (index || getNodeIndex(node));},
 	// other
 	header: function(node){return /h\d/i.test(node.nodeName);},
-	not: function(node, stack, index){
-		var i = 0, frag, result = true;
-		while (result && (frag = stack[i++])) 
-			result = !(tagChk(frag, node) && detect(frag, node, index));
+	not: function(node, value, index){
+		var result = true, i = 0, selector;
+		while (result && (selector = value[i++])) 
+			result = !detect(node, selector, selector.tag == '*', index);
 		return result;
 	}
 }
