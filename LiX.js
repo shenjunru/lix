@@ -597,6 +597,7 @@ PSEUDO: {
 SUB_PARSER.PSEUDO.has = SUB_PARSER.PSEUDO.not;
 
 LiX.$break = $break,
+LiX.syntaxErr = syntaxErr,
 LiX.parse = parseSelector,
 LiX.parser = {
 	attr: SUB_PARSER.ATTR,
