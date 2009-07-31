@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.5.1 build 20090726
+ * Version: 1.0.5.2 build 20090731
  * 
  * Copyright (c) 2009 Shen Junru (XFSN)
  * Released under the MIT, BSD, and GPL Licenses.
@@ -17,7 +17,7 @@ PATTERN = {
 	CHAR: /^\s*([>~+#*.:[,\w\u00c0-\uFFFF])/,
 	GROUP: /^\s*,\s*/,
 	TAG: /^\s*(\*|[\w\u00c0-\uFFFF-]+)/,
-	ID: /^(\s*)#(\*|[\w\u00c0-\uFFFF-]+)/,
+	ID: /^(\s*)#([\w\u00c0-\uFFFF-]+)/,
 	FILTER: /^\s*([>~+])\s*(\*|[\w\u00c0-\uFFFF-]+)/,
 	CLASS: /^(\s*)\.([\w\d\u00C0-\uFFFF-]+)/,
 	PSEUDO: /^\s*:([\w\u00c0-\uFFFF-]+)(?:\((?:(['"])(.+)\2|([^\)]+\(.+\))|([^\)]+))\))?/,
@@ -25,6 +25,10 @@ PATTERN = {
 	NTH: /(-?)(\d*)n((?:\+|-)?\d*)/
 },
 $break = {},
+attrMap = {
+	'class': 'className',
+	'for': 'htmlFor'
+},
 /**
  * Creates syntax error message with start index of error fragment in the selector.
  * @param {Number} i start index of error selector fragment
@@ -167,10 +171,9 @@ PARSER = {
 			parser = SUB_PARSER.ATTR[name];
 			if (value && parser) value = parser(expr, value, i);
 			frag.feature['[]'].push({
-				name: name,
+				name: attrMap[name] || name,
 				expr: expr,
-				value: value,
-				target: null
+				value: value
 			});
 		} catch (e) {
 			if (e != $break) throw syntaxErr(i, e);
@@ -398,10 +401,17 @@ contextsFilter = function(contexts, selector){
 		}
 	}
 },
-AttrMap = {
-	'class': 'className',
-	'for': 'htmlFor',
-	'id': 'id'
+attrHandle = {
+	href: function(node){
+		return node.getAttribute('href', 2);
+	},
+	src: function(node){
+		return node.getAttribute('src', 2);
+	},
+	className: function(node){
+		var value = node.className || node.getAttribute('class');
+		return value ? ' ' + value + ' ' : value;
+	}
 },
 /**
  * gets element's attribute value.
@@ -412,13 +422,7 @@ AttrMap = {
  * @private
  */
 getAttr = function(node, name){
-	var value = name in AttrMap ? node[AttrMap[name]] : node.getAttribute(name);
-	switch (name) {
-		case 'class':
-			value && (value = ' ' + value + ' ');
-			break;
-	}
-	return value;
+	return attrHandle[name] ? attrHandle[name](node) : node[name] != null ? node[name] : node.getAttribute(name);
 },
 /**
  * gets node index(begins at 1).
@@ -479,8 +483,9 @@ DETECT = {
 		return result;
 	},
 	'.': function(node, features){
-		if(!node.className) return false;
-		var classes = ' ' + node.className + ' ', result = true, i = 0, data;
+		var classes = node.className || node.getAttribute('class'), result = true, i = 0, data;
+		if(!classes) return false;
+		classes = ' ' + classes + ' ';
 		while (result && (data = features[i++]))
 			result = classes.indexOf(data) > -1;
 		return result;
@@ -591,6 +596,18 @@ PSEUDO: {
 
 SUB_PARSER.PSEUDO.has = SUB_PARSER.PSEUDO.not;
 
-// add functions to LiX
-LiX.parseSelector = parseSelector;
+LiX.$break = $break,
+LiX.parse = parseSelector,
+LiX.parser = {
+	attr: SUB_PARSER.ATTR,
+	pseudo: SUB_PARSER.PSEUDO
+},
+LiX.attr = {
+	map : attrMap,
+	handle: attrHandle
+},
+LiX.probe = {
+	attr: PROBE.ATTR,
+	pseudo: PROBE.PSEUDO
+};
 })();
