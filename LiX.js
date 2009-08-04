@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.5.2 build 20090731
+ * Version: 1.0.6 build 20090804
  * 
  * Copyright (c) 2009 Shen Junru (XFSN)
  * Released under the MIT, BSD, and GPL Licenses.
@@ -388,7 +388,8 @@ contextsFilter = function(contexts, selector){
 				if (contains(prevNode, node)) result.push(node);
 			return result;
 		}
-		case '':{
+		case '':
+		case '.':{
 			while (node = contexts[i++]) 
 				if (node.nodeType) {result.push(node);break;}
 			while (prevNode = node, node = contexts[i++])
@@ -470,15 +471,26 @@ FILTER = {
 		var node = context;
 		while (node = node.nextSibling) 
 			(node.nodeType == 1 && detect(node, selector, allTag)) && push(result, node);
+	},
+	'.': function(context, selector, result, allTag){
+		if (typeof(context.getElementsByClassName) == 'function') {
+			var nodes = context.getElementsByClassName(selector['.'].join(' ')), i = 0, node;
+			while (node = nodes[i++]) 
+				detect(node, selector, allTag) && push(result, node);
+		} else {
+			selector.feature['.'] = selector['.'];
+			FILTER[''](context, selector, result, allTag);
+			selector['.'] = selector.feature['.'];
+		}
 	}
 },
+returnFalse = function(){return false;},
 // Feature detect
 DETECT = {
 	':': function(node, features, index){
-		var result = true, i = 0, data, probe;
+		var result = true, i = 0, data;
 		while (result && (data = features[i++])) {
-			probe = PROBE.PSEUDO[data.name];
-			result = probe ? probe(node, data.value) : false;
+			result = (PROBE.PSEUDO[data.name] || returnFalse)(node, data.value);
 		}
 		return result;
 	},
@@ -493,7 +505,7 @@ DETECT = {
 	'[]': function(node, features){
 		var result = true, i = 0, data;
 		while (result && (data = features[i++])) 
-			result = PROBE.ATTR[data.expr](getAttr(node, data.name), data.value);
+			result = (PROBE.ATTR[data.expr] || returnFalse)(getAttr(node, data.name), data.value);
 		return result;
 	}
 },
@@ -587,28 +599,52 @@ PSEUDO: {
 	header: function(node){return /h\d/i.test(node.nodeName);},
 	not: function(node, value, index){
 		var result = true, i = 0, selector;
-		while (result && (selector = value[i++])) 
+		while (result && (selector = value[i++])) {
+			if(selector.type == '.') selector.type = '', selector.feature['.'] = selector['.']; 
 			result = !detect(node, selector, selector.tag == '*', index);
+		}
 		return result;
 	}
 }
 };
+
+if (document.getElementsByClassName && document.documentElement.getElementsByClassName) (function(){
+	var node = document.createElement('p');
+	node.innerHTML = '<a class="test e"></a><a class="test"></a>';
+
+	// can't find a second class (in Opera 9.6)
+	if (node.getElementsByClassName('test e').length == 0) return;
+
+	// caches class attributes, doesn't catch changes (in Safari 3.2)
+	node.lastChild.className = 'e';
+	if (node.getElementsByClassName('e').length == 1) return;
+
+	PARSER.CLASS = function(frag, match, i){
+		if (frag.type) {
+			frag.feature['.'] = frag.feature['.'] || [];
+			frag.feature['.'].push(match[2]);
+		} else {
+			frag.type = '.';
+			frag['.'] = frag['.'] || [];
+			frag['.'].push(match[2]);
+		}
+	};
+	node = null; // release memory in IE
+})();
 
 SUB_PARSER.PSEUDO.has = SUB_PARSER.PSEUDO.not;
 
 LiX.$break = $break,
 LiX.syntaxErr = syntaxErr,
 LiX.parse = parseSelector,
-LiX.parser = {
-	attr: SUB_PARSER.ATTR,
-	pseudo: SUB_PARSER.PSEUDO
-},
 LiX.attr = {
 	map : attrMap,
-	handle: attrHandle
+	handle: attrHandle,
+	parser: SUB_PARSER.ATTR,
+	probe: PROBE.ATTR,
 },
-LiX.probe = {
-	attr: PROBE.ATTR,
-	pseudo: PROBE.PSEUDO
+LiX.pseudo = {
+	parser: SUB_PARSER.PSEUDO,
+	probe: PROBE.PSEUDO
 };
 })();
