@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.6 build 20090807
+ * Version: 1.0.6.1 build 20090807
  * 
  * Copyright (c) 2009 Shen Junru (XFSN)
  * Released under the MIT, BSD, and GPL Licenses.
@@ -632,9 +632,19 @@ if (document.getElementsByClassName && document.documentElement.getElementsByCla
 
 SUB_PARSER.PSEUDO.has = SUB_PARSER.PSEUDO.not;
 
+// Extension API
 LiX.$break = $break,
 LiX.syntaxErr = syntaxErr,
 LiX.parse = parseSelector,
+LiX.index = function(){return lixIndex;},
+LiX.cache = function(){return lixCache;},
+LiX.match = function(selector, sets, context){
+	LiX(selector, context);
+	var ret = [], i = 0;
+	for (; i < sets.length; i++) 
+		lixIndex == sets[i]._lixIndex && ret.push(sets[i]);
+	return ret;
+},
 LiX.attr = {
 	map : attrMap,
 	handle: attrHandle,
