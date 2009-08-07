@@ -1,7 +1,7 @@
 /*!
  * LiX JavaScript CSS selector engine
  * Project since: 2009-02-18
- * Version: 1.0.6 build 20090804
+ * Version: 1.0.6 build 20090807
  * 
  * Copyright (c) 2009 Shen Junru (XFSN)
  * Released under the MIT, BSD, and GPL Licenses.
@@ -145,10 +145,9 @@ PARSER = {
 	 */
 	PSEUDO: function(frag, match, i){
 		try {
-			frag.feature[':'] = frag.feature[':'] || [];
 			var name = match[1].toLowerCase(), value = match[5] || match[4] || match[3], parser = SUB_PARSER.PSEUDO[name];
 			if (value && parser) value = parser(value, name.length + i + 2);
-			frag.feature[':'].push({
+			(frag.feature[':'] || (frag.feature[':'] = [])).push({
 				name: name,
 				value: value
 			});
@@ -165,12 +164,11 @@ PARSER = {
 	 */
 	ATTR: function(frag, match, i){
 		try {
-			frag.feature['[]'] = frag.feature['[]'] || [];
 			var name = match[1], expr = match[2] || '',
 			value = match[4],
 			parser = SUB_PARSER.ATTR[name];
 			if (value && parser) value = parser(expr, value, i);
-			frag.feature['[]'].push({
+			(frag.feature['[]'] || (frag.feature['[]'] = [])).push({
 				name: attrMap[name] || name,
 				expr: expr,
 				value: value
@@ -641,7 +639,7 @@ LiX.attr = {
 	map : attrMap,
 	handle: attrHandle,
 	parser: SUB_PARSER.ATTR,
-	probe: PROBE.ATTR,
+	probe: PROBE.ATTR
 },
 LiX.pseudo = {
 	parser: SUB_PARSER.PSEUDO,
